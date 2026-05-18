@@ -1,0 +1,6 @@
+{
+  "name": "Z-Scraper",
+  "description": "Plataforma avançada de prospecção imobiliária para extração resiliente de leads do Zap Imóveis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
