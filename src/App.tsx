@@ -238,61 +238,66 @@ export default function App() {
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[800px]">
-              <thead className="sticky top-0 bg-slate-900/95 backdrop-blur-md z-10">
-                <tr className="text-[10px] uppercase font-black tracking-widest text-slate-500 border-b border-slate-800">
-                  <th className="px-6 py-5 font-black">Nome / Imobiliária</th>
-                  <th className="px-6 py-5 font-black">CRECI</th>
-                  <th className="px-6 py-5 font-black">Região</th>
-                  <th className="px-6 py-5 font-black">Contato</th>
-                  <th className="px-6 py-5 font-black text-right pr-10">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/40">
+            <div className="min-w-[800px]">
+              {/* Header Grid */}
+              <div className="grid grid-cols-12 text-[10px] uppercase font-black tracking-widest text-slate-500 border-b border-slate-800 sticky top-0 bg-slate-900/95 backdrop-blur-md z-10 px-6 py-5">
+                <div className="col-span-4">Nome / Imobiliária</div>
+                <div className="col-span-2">CRECI</div>
+                <div className="col-span-2">Região</div>
+                <div className="col-span-2">Contato</div>
+                <div className="col-span-2 text-right pr-6">Ação</div>
+              </div>
+
+              {/* Body Rows */}
+              <div className="divide-y divide-slate-800/40">
                 <AnimatePresence mode="popLayout">
                   {corretores.length === 0 ? (
-                    <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                      <td colSpan={5} className="px-6 py-32 text-center text-slate-600 italic font-medium">
-                        Aguardando dados... Preencha os campos e inicie uma captura.
-                      </td>
-                    </motion.tr>
+                    <motion.div 
+                      initial={{ opacity: 0 }} 
+                      animate={{ opacity: 1 }}
+                      className="px-6 py-32 text-center text-slate-600 italic font-medium"
+                    >
+                      Aguardando dados... Preencha os campos e inicie uma captura.
+                    </motion.div>
                   ) : (
                     corretores.map((corretor) => (
-                      <motion.tr 
+                      <motion.div 
                         layout
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, scale: 0.98 }}
                         key={corretor.id} 
-                        className="hover:bg-white/5 transition-all group"
+                        className="grid grid-cols-12 items-center px-6 py-4 hover:bg-white/5 transition-all group"
                       >
-                        <td className="px-6 py-4 font-medium">
-                          <div className="flex flex-col">
-                            <span className="text-white text-sm group-hover:text-sky-400 transition-colors uppercase tracking-tight font-semibold">
-                              {corretor.nome}
-                            </span>
-                            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-black mt-0.5">
-                              {corretor.imobiliaria || "Corretor Independente"}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-[11px] font-mono text-slate-400 bg-slate-800/80 px-2 py-1 rounded border border-slate-700/50">
+                        <div className="col-span-4 font-medium flex flex-col">
+                          <span className="text-white text-sm group-hover:text-sky-400 transition-colors uppercase tracking-tight font-semibold">
+                            {corretor.nome}
+                          </span>
+                          <span className="text-[9px] text-slate-500 uppercase tracking-widest font-black mt-0.5">
+                            {corretor.imobiliaria || "Corretor Independente"}
+                          </span>
+                        </div>
+                        
+                        <div className="col-span-2 select-all">
+                          <span className="inline-block text-[11px] font-mono text-slate-400 bg-slate-800/80 px-2 py-1 rounded border border-slate-700/50">
                             {corretor.creci || "N/A"}
                           </span>
-                        </td>
-                        <td className="px-6 py-4">
+                        </div>
+                        
+                        <div className="col-span-2">
                           <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium lowercase first-letter:uppercase">
                             <MapPin className="w-3 h-3 text-slate-700" />
                             {corretor.cidade} - {corretor.estado}
                           </div>
-                        </td>
-                        <td className="px-6 py-4">
+                        </div>
+                        
+                        <div className="col-span-2 select-all">
                           <div className="text-sky-400 font-mono font-bold text-sm tracking-tight">
                             {corretor.telefone}
                           </div>
-                        </td>
-                        <td className="px-6 py-4 text-right pr-10">
+                        </div>
+                        
+                        <div className="col-span-2 text-right pr-6">
                           <a 
                             href={getWhatsAppUrl(corretor.telefone)}
                             target="_blank"
@@ -302,13 +307,13 @@ export default function App() {
                             <MessageCircle className="w-3.5 h-3.5" />
                             WhatsApp
                           </a>
-                        </td>
-                      </motion.tr>
+                        </div>
+                      </motion.div>
                     ))
                   )}
                 </AnimatePresence>
-              </tbody>
-            </table>
+              </div>
+            </div>
           </div>
 
           <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center text-[10px] uppercase font-black shrink-0">
