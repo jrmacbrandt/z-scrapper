@@ -23,52 +23,7 @@ const IMOBILIARIAS = [
   "Lopes Imobiliária", "RE/MAX Aliança", "QuintoAndar", "Souto Imóveis", "Golden Imóveis", "Netimóveis", "Brasil Brokers", "Nova Época", "Z-Imóveis", "Direct Imobiliária", "Consultoria Nobre", "Apsa Administração"
 ];
 
-let localCorretores: any[] = [
-  {
-    id: "seed-1",
-    anunciante_id: "a-101",
-    nome: "Marcos Venícius Silva",
-    creci: "CRECI 54321-F",
-    telefone: "(21) 98765-4321",
-    estado: "RJ",
-    cidade: "Niterói",
-    imobiliaria: "RE/MAX Aliança",
-    criado_em: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: "seed-2",
-    anunciante_id: "a-102",
-    nome: "Amanda Silveira Oliveira",
-    creci: "CRECI 65432-F",
-    telefone: "(21) 97654-3210",
-    estado: "RJ",
-    cidade: "Niterói",
-    imobiliaria: "Lopes Imobiliária",
-    criado_em: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
-  {
-    id: "seed-3",
-    anunciante_id: "a-103",
-    nome: "Roberto Carlos Mendes",
-    creci: "CRECI 12345-J",
-    telefone: "(11) 99123-4567",
-    estado: "SP",
-    cidade: "São Paulo",
-    imobiliaria: "Mendes Imobiliare",
-    criado_em: new Date(Date.now() - 3600000 * 6).toISOString(),
-  },
-  {
-    id: "seed-4",
-    anunciante_id: "a-104",
-    nome: "Juliana Peixoto Barros",
-    creci: "CRECI 78901-F",
-    telefone: "(11) 98888-7777",
-    estado: "SP",
-    cidade: "Santos",
-    imobiliaria: "Golden Imóveis",
-    criado_em: new Date(Date.now() - 3600000 * 8).toISOString(),
-  }
-];
+let localCorretores: any[] = [];
 
 function generateSimulatedCorretores(state: string, city: string, count = 8) {
   const ddds: Record<string, string> = {
@@ -255,25 +210,8 @@ app.post("/api/scrape", async (req, res) => {
   const { state, city } = req.body;
   if (!state || !city) return res.status(400).json({ error: "Estado e Cidade são obrigatórios." });
 
-  // 1. Generate local simulated / high-fidelity seed results instantly so the user gets instant visual feedback!
-  const simulated = generateSimulatedCorretores(state, city, 8);
-  for (const s of simulated) {
-    const idx = localCorretores.findIndex(r => r.anunciante_id === s.anunciante_id);
-    if (idx === -1) {
-      localCorretores.unshift(s);
-    }
-  }
-
-  // 2. Also try to upsert them into Supabase if configured
-  const supabase = getSupabase();
-  if (supabase) {
-    try {
-      const contactsToInsert = simulated.map(({ id, ...c }) => c); // remove id field for Supabase mapping
-      await supabase.from("corretores").upsert(contactsToInsert, { onConflict: "anunciante_id" });
-    } catch (err: any) {
-      console.error("Failed to upsert simulated items to Supabase:", err.message);
-    }
-  }
+  // APENAS INICIAR O CRAWLER REAL - sem gerar dados simulados.
+  console.log(`Iniciando crawler real para: ${state}/${city}`);
 
   // 3. Fire up the background crawler to attempt real web scraping too
   if (!process.env.VERCEL) {

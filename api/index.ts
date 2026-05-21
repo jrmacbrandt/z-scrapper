@@ -19,52 +19,7 @@ const IMOBILIARIAS = [
   "Lopes Imobiliária", "RE/MAX Aliança", "QuintoAndar", "Souto Imóveis", "Golden Imóveis", "Netimóveis", "Brasil Brokers", "Nova Época", "Z-Imóveis", "Direct Imobiliária", "Consultoria Nobre", "Apsa Administração"
 ];
 
-const SEED_CORRETORES = [
-  {
-    id: "seed-1",
-    anunciante_id: "a-101",
-    nome: "Marcos Venícius Silva",
-    creci: "CRECI 54321-F",
-    telefone: "(21) 98765-4321",
-    estado: "RJ",
-    cidade: "Niterói",
-    imobiliaria: "RE/MAX Aliança",
-    criado_em: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: "seed-2",
-    anunciante_id: "a-102",
-    nome: "Amanda Silveira Oliveira",
-    creci: "CRECI 65432-F",
-    telefone: "(21) 97654-3210",
-    estado: "RJ",
-    cidade: "Niterói",
-    imobiliaria: "Lopes Imobiliária",
-    criado_em: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
-  {
-    id: "seed-3",
-    anunciante_id: "a-103",
-    nome: "Roberto Carlos Mendes",
-    creci: "CRECI 12345-J",
-    telefone: "(11) 99123-4567",
-    estado: "SP",
-    cidade: "São Paulo",
-    imobiliaria: "Mendes Imobiliare",
-    criado_em: new Date(Date.now() - 3600000 * 6).toISOString(),
-  },
-  {
-    id: "seed-4",
-    anunciante_id: "a-104",
-    nome: "Juliana Peixoto Barros",
-    creci: "CRECI 78901-F",
-    telefone: "(11) 98888-7777",
-    estado: "SP",
-    cidade: "Santos",
-    imobiliaria: "Golden Imóveis",
-    criado_em: new Date(Date.now() - 3600000 * 8).toISOString(),
-  }
-];
+const SEED_CORRETORES: any[] = [];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -139,15 +94,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Estado e Cidade são obrigatórios." });
     }
 
-    const simulated = generateSimulatedCorretores(state, city, 8);
-
-    // No ambiente Serverless (Vercel), apenas retornamos dados simulados para a UI não quebrar.
-    // NÃO salvamos no Supabase para não poluir o banco de dados real com dados falsos.
-    console.log("Execução na Vercel: retornando apenas dados simulados na memória.");
+    // No ambiente Serverless (Vercel), bloqueamos a geração de fake data.
+    // O usuário deve rodar a versão local (npm run dev) para realizar scraping real.
+    console.log("Execução na Vercel: Extração em tempo real não suportada.");
 
     return res.json({
-      message: "Motor de busca de corretores iniciado. Capturando registros...",
-      data: simulated,
+      message: "Por favor, utilize o ambiente local (Motor de Busca) para realizar novas extrações. A Vercel exibirá os resultados extraídos.",
+      data: [],
     });
   }
 

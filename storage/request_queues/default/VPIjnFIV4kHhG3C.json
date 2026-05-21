@@ -1,0 +1,9 @@
+{
+	"id": "VPIjnFIV4kHhG3C",
+	"json": "{\"id\":\"VPIjnFIV4kHhG3C\",\"url\":\"https://www.zapimoveis.com.br/venda/imoveis/rj+niterói/?pagina=1\",\"loadedUrl\":\"https://www.zapimoveis.com.br/venda/imoveis/rj+niter%C3%B3i/?pagina=1\",\"uniqueKey\":\"https://www.zapimoveis.com.br/venda/imoveis/rj+niter%C3%B3i?pagina=1\",\"method\":\"GET\",\"noRetry\":false,\"retryCount\":0,\"errorMessages\":[],\"headers\":{},\"userData\":{\"page\":1,\"__crawlee\":{\"state\":4}},\"handledAt\":\"2026-05-21T02:57:44.558Z\"}",
+	"method": "GET",
+	"orderNo": null,
+	"retryCount": 0,
+	"uniqueKey": "https://www.zapimoveis.com.br/venda/imoveis/rj+niter%C3%B3i?pagina=1",
+	"url": "https://www.zapimoveis.com.br/venda/imoveis/rj+niterói/?pagina=1"
+}
