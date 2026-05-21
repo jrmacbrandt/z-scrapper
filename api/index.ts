@@ -141,16 +141,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const simulated = generateSimulatedCorretores(state, city, 8);
 
-    // Try to persist in Supabase if configured
-    const supabase = getSupabase();
-    if (supabase) {
-      try {
-        const contactsToInsert = simulated.map(({ id, ...c }) => c);
-        await supabase.from("corretores").upsert(contactsToInsert, { onConflict: "anunciante_id" });
-      } catch (err: any) {
-        console.error("Supabase upsert error:", err.message);
-      }
-    }
+    // No ambiente Serverless (Vercel), apenas retornamos dados simulados para a UI não quebrar.
+    // NÃO salvamos no Supabase para não poluir o banco de dados real com dados falsos.
+    console.log("Execução na Vercel: retornando apenas dados simulados na memória.");
 
     return res.json({
       message: "Motor de busca de corretores iniciado. Capturando registros...",
