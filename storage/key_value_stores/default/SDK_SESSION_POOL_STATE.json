@@ -1,9 +1,9 @@
 {
-  "usableSessionsCount": 6,
+  "usableSessionsCount": 2,
   "retiredSessionsCount": 0,
   "sessions": [
     {
-      "id": "session_nD1Nh0P0OB",
+      "id": "session_GnYQqaYbb0",
       "cookieJar": {
         "version": "tough-cookie@6.0.1",
         "storeType": "MemoryCookieStore",
@@ -16,14 +16,14 @@
       "userData": {},
       "maxErrorScore": 3,
       "errorScoreDecrement": 0.5,
-      "expiresAt": "2026-05-21T03:47:34.563Z",
-      "createdAt": "2026-05-21T02:57:34.563Z",
+      "expiresAt": "2026-05-25T21:48:57.190Z",
+      "createdAt": "2026-05-25T20:58:57.190Z",
       "usageCount": 0,
       "maxUsageCount": 50,
       "errorScore": 0
     },
     {
-      "id": "session_d2AjyifPM8",
+      "id": "session_bb6JjcGsgr",
       "cookieJar": {
         "version": "tough-cookie@6.0.1",
         "storeType": "MemoryCookieStore",
@@ -34,349 +34,67 @@
         "cookies": [
           {
             "key": "z_user_id",
-            "value": "fbb17eff-a5b5-475c-8e6e-58985800d6a5",
-            "expires": "2026-08-19T02:57:38.255Z",
+            "value": "746768c8-14d4-489a-980a-51e52073f253",
+            "expires": "2026-08-23T20:59:00.206Z",
             "domain": "www.zapimoveis.com.br",
             "path": "/",
             "hostOnly": true,
-            "creation": "2026-05-21T02:57:39.854Z",
-            "lastAccessed": "2026-05-21T02:57:39.854Z"
+            "creation": "2026-05-25T20:59:02.789Z",
+            "lastAccessed": "2026-05-25T20:59:02.789Z"
           },
           {
             "key": "z_exp",
-            "value": "pricing_control.login-otp_on.izi-vr_control.prop-v2_on.fav-fldrs_enable.izi-degust_control.explisting_control.hidesingle_on.retail_control.discount_control.pos-v3_control",
-            "expires": "2026-05-21T03:07:38.256Z",
+            "value": "login-otp_on.izi-vr_control.prop-v2_on.pricing_control.fav-fldrs_enable.izi-degust_control.hidesingle_on.retail_control.discount_on.explisting_control.pos-v3_on",
+            "expires": "2026-05-25T21:09:00.207Z",
             "domain": "www.zapimoveis.com.br",
             "path": "/",
             "hostOnly": true,
-            "creation": "2026-05-21T02:57:39.855Z",
-            "lastAccessed": "2026-05-21T02:57:39.855Z"
+            "creation": "2026-05-25T20:59:02.790Z",
+            "lastAccessed": "2026-05-25T20:59:02.790Z"
           },
           {
             "key": "_cfuvid",
-            "value": ".GxSQD2iBJXnnsv5IYItFuhrNac081oJSest7zkKsKM-1779332258.0434246-1.0.1.1-qUxZsGIvSwc0drPxAFHW5qCBo3quiKsyH2GdgF_7Ayk",
-            "expires": "2026-05-21T03:47:39.850Z",
+            "value": "SQDd8jOHh5jPwsCT5W66zkegkwDPgpuRjwG5Zbt6dOQ-1779742740.01112-1.0.1.1-aKIi0aEW8RcEvW2WsM4r6OBSdaBM3bSb2p3AAazlRk8",
+            "expires": "2026-05-25T21:49:02.786Z",
             "domain": "zapimoveis.com.br",
             "path": "/",
             "secure": true,
             "httpOnly": true,
             "hostOnly": false,
-            "creation": "2026-05-21T02:57:39.855Z",
-            "lastAccessed": "2026-05-21T02:57:39.855Z"
-          },
-          {
-            "key": "__cf_bm",
-            "value": "PtN2ZH6M5u1lfx2Lzw9Y_TnSHJduXedQd78xGr_Nwa0-1779332259.6262045-1.0.1.1-NcPHfyh6k6SPaGnP7SPeXZfZg9VZ6xh.hYFwoDu.xUz7lADW.rEC1p5YmbsKsotRs0jcC2DH_ihKr2BOSD979dvCGcTJfQHUKCmcKChTVyx_J_bgNHxAhWYj2sWcECJP",
-            "expires": "2026-05-21T03:27:39.566Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/",
-            "secure": true,
-            "httpOnly": true,
-            "hostOnly": false,
-            "creation": "2026-05-21T02:57:39.863Z",
-            "lastAccessed": "2026-05-21T02:57:39.863Z"
-          }
-        ]
-      },
-      "userData": {},
-      "maxErrorScore": 3,
-      "errorScoreDecrement": 0.5,
-      "expiresAt": "2026-05-21T03:47:34.579Z",
-      "createdAt": "2026-05-21T02:57:34.579Z",
-      "usageCount": 1,
-      "maxUsageCount": 50,
-      "errorScore": 0
-    },
-    {
-      "id": "session_FusORkQpFL",
-      "cookieJar": {
-        "version": "tough-cookie@6.0.1",
-        "storeType": "MemoryCookieStore",
-        "rejectPublicSuffixes": true,
-        "enableLooseMode": false,
-        "allowSpecialUseDomain": true,
-        "prefixSecurity": "silent",
-        "cookies": []
-      },
-      "userData": {},
-      "maxErrorScore": 3,
-      "errorScoreDecrement": 0.5,
-      "expiresAt": "2026-05-21T03:48:14.390Z",
-      "createdAt": "2026-05-21T02:58:14.390Z",
-      "usageCount": 0,
-      "maxUsageCount": 50,
-      "errorScore": 0
-    },
-    {
-      "id": "session_mMd4DdgRh7",
-      "cookieJar": {
-        "version": "tough-cookie@6.0.1",
-        "storeType": "MemoryCookieStore",
-        "rejectPublicSuffixes": true,
-        "enableLooseMode": false,
-        "allowSpecialUseDomain": true,
-        "prefixSecurity": "silent",
-        "cookies": [
-          {
-            "key": "user_lat_lng",
-            "value": "-22.9201:-43.0811",
-            "expires": "2026-05-22T02:58:19.000Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/venda/imoveis/rj+taquara",
-            "hostOnly": false,
-            "creation": "2026-05-21T02:58:20.855Z",
-            "lastAccessed": "2026-05-21T02:58:20.855Z"
-          },
-          {
-            "key": "z_user_id",
-            "value": "a39a0d7a-5e73-4584-8cbc-2baf41852c75",
-            "expires": "2026-08-19T02:58:16.635Z",
-            "domain": "www.zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": true,
-            "creation": "2026-05-21T02:58:20.865Z",
-            "lastAccessed": "2026-05-21T02:58:20.865Z"
-          },
-          {
-            "key": "z_exp",
-            "value": "pricing_control.login-otp_on.izi-vr_disable.prop-v2_on.fav-fldrs_enable.izi-degust_control.explisting_control.hidesingle_on.retail_enable.discount_on.pos-v3_control",
-            "expires": "2026-05-21T03:08:16.636Z",
-            "domain": "www.zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": true,
-            "creation": "2026-05-21T02:58:20.866Z",
-            "lastAccessed": "2026-05-21T02:58:20.866Z"
-          },
-          {
-            "key": "_cfuvid",
-            "value": "XjexVxCqekO921rKTpFqdwWQUvUbis2TxDb9ympAVaI-1779332296.6580648-1.0.1.1-pxOEYQ2_.lIto6nTCE92k7NCeiWU_BGxJR012xKgwRc",
-            "expires": "2026-05-21T03:48:20.854Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/",
-            "secure": true,
-            "httpOnly": true,
-            "hostOnly": false,
-            "creation": "2026-05-21T02:58:20.866Z",
-            "lastAccessed": "2026-05-21T02:58:20.866Z"
+            "creation": "2026-05-25T20:59:02.790Z",
+            "lastAccessed": "2026-05-25T20:59:02.790Z"
           },
           {
             "key": "cf_clearance",
-            "value": "ilTNVM0yvzsMOjG.M2gPK3Sf0EBhHfTVRKCTTd8G_hc-1779332299-1.2.1.1-VC0dVW43eW1XHIAk1_8npKC06PxMuKRaFcEPGTLy4dwSGEBNiHhWrGvNbFPFqDXD7j2QWUAQHDI40KB9_QPJT9CL9DIrxDxSlHnzoPswsEe.06KBJqpnOotOeJrfa_mhJFJ09t.iFtgRYt.n4Xy5xKMZGOS5ocoGh8pNCoSxfketIlsyTCD.7d97QBVS1TcHRr4yIy9Vm5WpjPFDTPapeSE71HuFAc6lYtGZaBIRlsEKTLqwNOqAyeQ39E2fnsx44LjdvSMIOf.vQyUmYb82JQyvIADdpMu28q5P1bbBkMusHAFnm5BBCy2he25Grll9wTzwXEwZ965Y9WwQBdM_Dw",
-            "expires": "2027-05-21T02:58:18.715Z",
+            "value": "OBZSH..hfspnrHNSRCu.D9jtCwbDF.9U.anEXH1JAn4-1779742742-1.2.1.1-JhCA1Gf7Xa6rvr8I5LowJwwsUdVoqA6dFM1mZJCIsn1uUdy55ocCoRhteOdqcuJkLoT0oHKC1TfXk1btx.pNJZZppssyneNKHmrqp5Nnfjs6TvBGBBqzPaUqnYcG44w8IqM2MI6o0wu1g8acOD21Fg_RPz26UNVgxSco7iHBozeadhzcYcXOQVnz9vou25UyUTpOqDyp9JidM0ORvfLlcmQIZsk8ffJl5FbPR2qxV3Y3NGjntW8EcxyBNKI06PsQWrEJpVqYApFxSEf5ZbZ2Ode2oZZQNOz90RUfwaYt3xyC7cRe8Ee_FYqOODvjGpdpKUNNzN1v6KAniZT2n9bBkw",
+            "expires": "2027-05-25T20:59:02.526Z",
             "domain": "zapimoveis.com.br",
             "path": "/",
             "secure": true,
             "httpOnly": true,
             "hostOnly": false,
-            "creation": "2026-05-21T02:58:20.867Z",
-            "lastAccessed": "2026-05-21T02:58:20.867Z"
+            "creation": "2026-05-25T20:59:02.797Z",
+            "lastAccessed": "2026-05-25T20:59:02.797Z"
           },
           {
             "key": "__cf_bm",
-            "value": "Ix1L11PYKMwYzww7JORseoAJ.ucLJZagK3jZbG73iy8-1779332299.0684454-1.0.1.1-gmGDAISNFCUva5KHgPin2Mx_mhB5X5AGaWXOSXy9F2PHlxSxYQEU67VwFt3cobp7FZ52JjVNvnQs32GcsKgEUjhrEwH3f.CJo_gK6V.gy.d.3rnQEcqv.copwvcPNfY2",
-            "expires": "2026-05-21T03:28:18.716Z",
+            "value": "4BpGz.ZaEe0I9c4e9vlM8JjMNQx7reXu43nEXmngxoo-1779742742.5421028-1.0.1.1-qRn0K3rRm..ZmtufYbkXqIWuW40aLkn79qxx6L_ZNVbs1U9b5gs4HHJxhB3a5mRe1wCdddMxRgOP3zZf1EvUJEDvp3Z3FnfAYj_Scodj2NPaZb..bQUl86oKUMokXJD.",
+            "expires": "2026-05-25T21:29:02.528Z",
             "domain": "zapimoveis.com.br",
             "path": "/",
             "secure": true,
             "httpOnly": true,
             "hostOnly": false,
-            "creation": "2026-05-21T02:58:20.867Z",
-            "lastAccessed": "2026-05-21T02:58:20.867Z"
-          },
-          {
-            "key": "_dd_s",
-            "value": "rum=0&expire=1779333199160",
-            "expires": "2026-05-21T03:13:19.000Z",
-            "domain": "www.zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": true,
-            "creation": "2026-05-21T02:58:20.867Z",
-            "lastAccessed": "2026-05-21T02:58:20.867Z"
-          },
-          {
-            "key": "sf_utm_source",
-            "value": "direct",
-            "expires": "2026-08-19T02:58:19.000Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": false,
-            "creation": "2026-05-21T02:58:20.867Z",
-            "lastAccessed": "2026-05-21T02:58:20.867Z"
-          },
-          {
-            "key": "sf_utm_medium",
-            "value": "none",
-            "expires": "2026-08-19T02:58:19.000Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": false,
-            "creation": "2026-05-21T02:58:20.867Z",
-            "lastAccessed": "2026-05-21T02:58:20.867Z"
+            "creation": "2026-05-25T20:59:02.802Z",
+            "lastAccessed": "2026-05-25T20:59:02.802Z"
           }
         ]
       },
       "userData": {},
       "maxErrorScore": 3,
       "errorScoreDecrement": 0.5,
-      "expiresAt": "2026-05-21T03:48:14.393Z",
-      "createdAt": "2026-05-21T02:58:14.393Z",
-      "usageCount": 1,
-      "maxUsageCount": 50,
-      "errorScore": 0
-    },
-    {
-      "id": "session_Yvfk2Fp8ns",
-      "cookieJar": {
-        "version": "tough-cookie@6.0.1",
-        "storeType": "MemoryCookieStore",
-        "rejectPublicSuffixes": true,
-        "enableLooseMode": false,
-        "allowSpecialUseDomain": true,
-        "prefixSecurity": "silent",
-        "cookies": []
-      },
-      "userData": {},
-      "maxErrorScore": 3,
-      "errorScoreDecrement": 0.5,
-      "expiresAt": "2026-05-21T03:50:12.738Z",
-      "createdAt": "2026-05-21T03:00:12.738Z",
-      "usageCount": 0,
-      "maxUsageCount": 50,
-      "errorScore": 0
-    },
-    {
-      "id": "session_MBoOjjd8pW",
-      "cookieJar": {
-        "version": "tough-cookie@6.0.1",
-        "storeType": "MemoryCookieStore",
-        "rejectPublicSuffixes": true,
-        "enableLooseMode": false,
-        "allowSpecialUseDomain": true,
-        "prefixSecurity": "silent",
-        "cookies": [
-          {
-            "key": "user_lat_lng",
-            "value": "-22.9201:-43.0811",
-            "expires": "2026-05-22T03:00:20.000Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/venda/imoveis/rj+jacarepagu%C3%A1",
-            "hostOnly": false,
-            "creation": "2026-05-21T03:00:21.188Z",
-            "lastAccessed": "2026-05-21T03:00:21.188Z"
-          },
-          {
-            "key": "z_user_id",
-            "value": "be964250-fa1c-4c62-830a-d2a666c8d8c0",
-            "expires": "2026-08-19T03:00:15.702Z",
-            "domain": "www.zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": true,
-            "creation": "2026-05-21T03:00:21.188Z",
-            "lastAccessed": "2026-05-21T03:00:21.188Z"
-          },
-          {
-            "key": "z_exp",
-            "value": "pricing_control.login-otp_on.izi-vr_control.prop-v2_on.fav-fldrs_enable.izi-degust_control.explisting_control.hidesingle_on.retail_enable.discount_on.pos-v3_control",
-            "expires": "2026-05-21T03:10:15.703Z",
-            "domain": "www.zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": true,
-            "creation": "2026-05-21T03:00:21.188Z",
-            "lastAccessed": "2026-05-21T03:00:21.188Z"
-          },
-          {
-            "key": "_cfuvid",
-            "value": "MJM_Z5GfzFGWT5ni3_yZ3lD47pakU568hX5TTOPFmrg-1779332415.5714169-1.0.1.1-MvX9C.l2HqZmLuYqlC4pDBOjCKTHYI.gPB5Hd8rlEjA",
-            "expires": "2026-05-21T03:50:21.187Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/",
-            "secure": true,
-            "httpOnly": true,
-            "hostOnly": false,
-            "creation": "2026-05-21T03:00:21.188Z",
-            "lastAccessed": "2026-05-21T03:00:21.188Z"
-          },
-          {
-            "key": "cf_clearance",
-            "value": "Tg3DKQwB5eJQuN7PxvaXjmdkNv9UljSOkgGsyKwbzb4-1779332418-1.2.1.1-fJlWkWVI3mlkLCupKfj0qD9OVqX1RtWk5yNzZYwWUiWKDjAht5GxQlqPBgRF6sXGLoWgugsxXSu3khM6x.ovD0jkDqA2.7tFHArR9PaeP98L_PdX..PgX0OfkYxCXzXQ.R4EBZeD.xpyoYajvWKZ7qQ83PO4dZqFWV2ZpF7GqaV29l9ekupE6vzPKwOdlKpNS.zS3xLP2NC51ANeDcIcgdKndg4jkgDBXbX4ovo1TOVdEmJEZ4zQjWOogCNBU1Z4FgMGjTe.cfcRDSCyApNVYtFGDocWtspErtd_k8flOv8yLN9U7mUEez2di1Nrd1Lqfv4OkNiMB0YMHJIWmys5Fw",
-            "expires": "2027-05-21T03:00:18.376Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/",
-            "secure": true,
-            "httpOnly": true,
-            "hostOnly": false,
-            "creation": "2026-05-21T03:00:21.188Z",
-            "lastAccessed": "2026-05-21T03:00:21.188Z"
-          },
-          {
-            "key": "__cf_bm",
-            "value": "rOPjEeeBCulYx5TUiTZ_B1E56eU1Txo4Jp0KQiKezoI-1779332418.7321634-1.0.1.1-eNJbwNgdLX0kflnMQxuoDg9Rz4SDtd.zaakNaULCEb9_1icYDfCQa3B8pfW8ekS1nZ0MNSJHvBctpprh5U.k4KA6_SqGyUSbiV6XFy4rA_K1y9xtpYS7oo9ucon6QPda",
-            "expires": "2026-05-21T03:30:18.376Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/",
-            "secure": true,
-            "httpOnly": true,
-            "hostOnly": false,
-            "creation": "2026-05-21T03:00:21.188Z",
-            "lastAccessed": "2026-05-21T03:00:21.188Z"
-          },
-          {
-            "key": "_dd_s",
-            "value": "rum=0&expire=1779333318860",
-            "expires": "2026-05-21T03:15:18.000Z",
-            "domain": "www.zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": true,
-            "creation": "2026-05-21T03:00:21.188Z",
-            "lastAccessed": "2026-05-21T03:00:21.188Z"
-          },
-          {
-            "key": "sf_utm_source",
-            "value": "direct",
-            "expires": "2026-08-19T03:00:19.000Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": false,
-            "creation": "2026-05-21T03:00:21.188Z",
-            "lastAccessed": "2026-05-21T03:00:21.188Z"
-          },
-          {
-            "key": "sf_utm_medium",
-            "value": "none",
-            "expires": "2026-08-19T03:00:19.000Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": false,
-            "creation": "2026-05-21T03:00:21.188Z",
-            "lastAccessed": "2026-05-21T03:00:21.188Z"
-          },
-          {
-            "key": "l_id",
-            "value": "f8330970-0d23-4fbc-b97a-dedf42a40ab3",
-            "expires": "2027-06-25T03:00:20.969Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": false,
-            "creation": "2026-05-21T03:00:21.189Z",
-            "lastAccessed": "2026-05-21T03:00:21.189Z"
-          },
-          {
-            "key": "s_id",
-            "value": "57d9d4f5-6ee4-4c02-b347-56ac23410d4e2026-05-21T03:00:21.272543Z",
-            "expires": "2026-05-21T03:30:20.970Z",
-            "domain": "zapimoveis.com.br",
-            "path": "/",
-            "hostOnly": false,
-            "creation": "2026-05-21T03:00:21.189Z",
-            "lastAccessed": "2026-05-21T03:00:21.189Z"
-          }
-        ]
-      },
-      "userData": {},
-      "maxErrorScore": 3,
-      "errorScoreDecrement": 0.5,
-      "expiresAt": "2026-05-21T03:50:12.740Z",
-      "createdAt": "2026-05-21T03:00:12.740Z",
+      "expiresAt": "2026-05-25T21:48:57.198Z",
+      "createdAt": "2026-05-25T20:58:57.198Z",
       "usageCount": 1,
       "maxUsageCount": 50,
       "errorScore": 0

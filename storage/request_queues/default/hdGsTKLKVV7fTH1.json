@@ -1,9 +1,0 @@
-{
-	"id": "hdGsTKLKVV7fTH1",
-	"json": "{\"id\":\"hdGsTKLKVV7fTH1\",\"url\":\"https://www.zapimoveis.com.br/venda/imoveis/rj+jacarepaguá/?pagina=1\",\"loadedUrl\":\"https://www.zapimoveis.com.br/venda/imoveis/rj+jacarepagu%C3%A1/?pagina=1\",\"uniqueKey\":\"https://www.zapimoveis.com.br/venda/imoveis/rj+jacarepagu%C3%A1?pagina=1\",\"method\":\"GET\",\"noRetry\":false,\"retryCount\":0,\"errorMessages\":[],\"headers\":{},\"userData\":{\"page\":1,\"__crawlee\":{\"state\":4}},\"handledAt\":\"2026-05-21T03:00:23.702Z\"}",
-	"method": "GET",
-	"orderNo": null,
-	"retryCount": 0,
-	"uniqueKey": "https://www.zapimoveis.com.br/venda/imoveis/rj+jacarepagu%C3%A1?pagina=1",
-	"url": "https://www.zapimoveis.com.br/venda/imoveis/rj+jacarepaguá/?pagina=1"
-}

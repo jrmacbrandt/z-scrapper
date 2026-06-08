@@ -1,297 +1,679 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { PlaywrightCrawler, ProxyConfiguration, Configuration } from "crawlee";
-import { createClient } from "@supabase/supabase-js";
-import * as cheerio from "cheerio";
+import { chromium } from "playwright";
+import db, { initDB, uuidv4 } from "./database.js";
 import dotenv from "dotenv";
+import { randomUUID } from "crypto";
+import igRouter from "./server-ig.js";
+import gmapsRouter from "./server-gmaps.js";
 
 dotenv.config();
+initDB();
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3001;
 
-// Local Memory Database fallback (ensures the dashboard always works instantly)
-const FIRST_NAMES = [
-  "Alexandre", "Bruna", "Carlos", "Daniela", "Eduardo", "Fernanda", "Gabriel", "Helena", "Igor", "Juliana", "Leonardo", "Mariana", "Newton", "Patricia", "Ricardo", "Sandra", "Thiago", "Vanessa", "Rodrigo", "Camila", "Felipe", "Beatriz", "Gustavo", "Larissa"
-];
-
-const LAST_NAMES = [
-  "Silva", "Santos", "Oliveira", "Souza", "Rodrigues", "Ferreira", "Alves", "Pereira", "Gomes", "Costa", "Ribeiro", "Martins", "Carvalho", "Almeida", "Mendes", "Barros", "Azevedo", "Cardoso"
-];
-
-const IMOBILIARIAS = [
-  "Lopes Imobiliária", "RE/MAX Aliança", "QuintoAndar", "Souto Imóveis", "Golden Imóveis", "Netimóveis", "Brasil Brokers", "Nova Época", "Z-Imóveis", "Direct Imobiliária", "Consultoria Nobre", "Apsa Administração"
-];
-
+// ── State ─────────────────────────────────────────────────────────────────────
 let localCorretores: any[] = [];
+let localBuscas: any[] = [];
+let scraperRunning = false;
+let scraperLog: string[] = [];
 
-function generateSimulatedCorretores(state: string, city: string, count = 8) {
-  const ddds: Record<string, string> = {
-    SP: "11", RJ: "21", MG: "31", PR: "41", SC: "48", DF: "61", BA: "71", PE: "81", CE: "85", RS: "51"
-  };
-  const ddd = ddds[state.toUpperCase()] || "11";
-  const list = [];
+function logScraper(msg: string) {
+  const ts = new Date().toLocaleTimeString("pt-BR");
+  const line = `[${ts}] ${msg}`;
+  console.log(line);
+  scraperLog.unshift(line);
+  if (scraperLog.length > 100) scraperLog.pop();
+}
+
+// ── Save contacts ─────────────────────────────────────────────────────────────
+async function saveContacts(contacts: any[]) {
+  if (contacts.length === 0) return;
+  for (const c of contacts) {
+    const idx = localCorretores.findIndex(r => r.anunciante_id === c.anunciante_id);
+    if (idx > -1) localCorretores[idx] = c;
+    else localCorretores.unshift(c);
+  }
   
-  for (let i = 0; i < count; i++) {
-    const fn = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
-    const ln = LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
-    const name = `${fn} ${ln}`;
-    const imob = Math.random() > 0.3 ? IMOBILIARIAS[Math.floor(Math.random() * IMOBILIARIAS.length)] : "Corretor Independente";
-    const creciNum = Math.floor(Math.random() * 80000 + 10000);
-    const creci = Math.random() > 0.15 ? `CRECI ${creciNum}-F` : `CRECI ${creciNum}-J`;
-    const randPhone = `9${Math.floor(Math.random() * 9000 + 1000)}-${Math.floor(Math.random() * 9000 + 1000)}`;
-    const phone = `(${ddd}) ${randPhone}`;
-    const id = `sim-${state.toLowerCase()}-${city.toLowerCase().replace(/\s+/g, "-")}-${creciNum}`;
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO corretores (id, anunciante_id, nome, creci, telefone, estado, cidade, imobiliaria, criado_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(anunciante_id) DO UPDATE SET
+        nome=excluded.nome,
+        creci=excluded.creci,
+        telefone=excluded.telefone,
+        estado=excluded.estado,
+        cidade=excluded.cidade,
+        imobiliaria=excluded.imobiliaria,
+        criado_em=excluded.criado_em
+    `);
     
-    list.push({
-      id,
-      anunciante_id: id,
-      nome: name,
+    const insertMany = db.transaction((items) => {
+      for (const c of items) {
+        stmt.run(
+          uuidv4(), 
+          c.anunciante_id, 
+          c.nome, 
+          c.creci || null, 
+          c.telefone, 
+          c.estado, 
+          c.cidade, 
+          c.imobiliaria || null, 
+          c.criado_em
+        );
+      }
+    });
+    
+    insertMany(contacts);
+    logScraper(`✅ ${contacts.length} contatos salvos no banco SQLite.`);
+  } catch (e: any) {
+    logScraper(`⚠️ SQLite Exception: ${e.message}`);
+  }
+}
+
+// ── Parse contacts from any listing JSON ──────────────────────────────────────
+function parseContacts(listings: any[], state: string, city: string, seen: Set<string>): any[] {
+  const contacts: any[] = [];
+  
+  // Step 1: Build a registry of advertisers to resolve RSC references
+  const advRegistry = new Map<string, { name?: string, creci?: string, phones: Set<string> }>();
+  
+  for (const item of listings) {
+    const l = item?.listing || item || {};
+    const adv = item?.advertiser || l?.advertiser || l?.account || {};
+    const advId = String(adv.id || adv.legacyId || "");
+    if (!advId) continue;
+    
+    let entry = advRegistry.get(advId);
+    if (!entry) {
+      entry = { phones: new Set<string>() };
+      advRegistry.set(advId, entry);
+    }
+    
+    if (adv.name && !String(adv.name).startsWith("$")) {
+      entry.name = String(adv.name).trim();
+    }
+    if (adv.license && !String(adv.license).startsWith("$")) {
+      entry.creci = String(adv.license).trim();
+    }
+    if (adv.creci && !String(adv.creci).startsWith("$")) {
+      entry.creci = String(adv.creci).trim();
+    }
+    
+    const rawPhones: any[] = [];
+    if (Array.isArray(adv.phoneNumbers)) rawPhones.push(...adv.phoneNumbers);
+    if (Array.isArray(adv.phones)) rawPhones.push(...adv.phones);
+    if (adv.phone) rawPhones.push(adv.phone);
+    if (adv.whatsAppNumber) rawPhones.push(adv.whatsAppNumber);
+    if (Array.isArray(l.phones)) rawPhones.push(...l.phones);
+    if (l.phone) rawPhones.push(l.phone);
+    
+    for (const p of rawPhones) {
+      if (p && typeof p === "string" && !p.startsWith("$")) {
+        const digits = p.replace(/\D/g, "");
+        if (digits.length >= 8) {
+          entry.phones.add(p.trim());
+        }
+      }
+    }
+  }
+  
+  // Step 2: Extract contacts using resolved registry details
+  for (const item of listings) {
+    const l = item?.listing || item || {};
+    const adv = item?.advertiser || l?.advertiser || l?.account || {};
+    
+    const advId = String(adv.id || adv.legacyId || l.id || l.listingId || "");
+    if (!advId) continue;
+    
+    // Resolve from registry
+    const registryEntry = advRegistry.get(advId);
+    
+    const nome = (registryEntry?.name || adv.name || l.advertiserName || l.name || "").trim();
+    const creci = (registryEntry?.creci || adv.license || adv.creci || l.creci || "N/A").trim();
+    
+    const phones = registryEntry ? Array.from(registryEntry.phones) : [];
+    // Fallback if registry didn't capture or wasn't keyed
+    if (phones.length === 0) {
+      const rawPhones: any[] = [];
+      if (Array.isArray(adv.phoneNumbers)) rawPhones.push(...adv.phoneNumbers);
+      if (adv.whatsAppNumber) rawPhones.push(adv.whatsAppNumber);
+      for (const p of rawPhones) {
+        if (p && typeof p === "string" && !p.startsWith("$")) {
+          phones.push(p.trim());
+        }
+      }
+    }
+    
+    const phone = phones[0] || "";
+    
+    if (!advId || !nome || seen.has(advId)) continue;
+    seen.add(advId);
+    
+    // We only want real estate contacts (either has a phone number or a CRECI)
+    if (!phone && creci === "N/A") continue;
+    
+    contacts.push({
+      anunciante_id: advId,
+      nome,
       creci,
-      telefone: phone,
+      telefone: phone || "Não informado",
+      imobiliaria: nome || "N/A",
       estado: state.toUpperCase(),
       cidade: city.trim(),
-      imobiliaria: imob,
-      criado_em: new Date(Date.now() - i * 15 * 60 * 1000).toISOString(),
+      criado_em: new Date().toISOString(),
     });
   }
-  return list;
+  
+  return contacts;
 }
 
-// Supabase Client Lazy Init
-let supabase: any = null;
-const getSupabase = () => {
-  if (!supabase) {
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_ANON_KEY;
-    
-    // Improved placeholder and validity check
-    const isPlaceholder = (s: string | undefined) => 
-      !s || s.includes("your-project") || s.includes("your-anon-key") || s.includes("MY_SUPABASE_URL");
-
-    if (isPlaceholder(url) || isPlaceholder(key)) {
-      console.warn("Supabase credentials missing or set to placeholders. Data will not be persisted.");
-      return null;
+// ── Recursive search for listings in any parsed JSON ─────────────────────────
+function deepFindListings(obj: any, depth = 0): any[] {
+  if (depth > 8 || !obj || typeof obj !== "object") return [];
+  if (Array.isArray(obj)) {
+    if (obj.length > 0 && (obj[0]?.listing || obj[0]?.account || obj[0]?.listingId || obj[0]?.advertiser)) return obj;
+    for (const item of obj) {
+      const found = deepFindListings(item, depth + 1);
+      if (found.length) return found;
     }
+    return [];
+  }
+  if (Array.isArray(obj.listings) && obj.listings.length > 0) return obj.listings;
+  for (const key of Object.keys(obj)) {
+    const found = deepFindListings(obj[key], depth + 1);
+    if (found.length) return found;
+  }
+  return [];
+}
 
-    try {
-      // Validate URL format before calling createClient to avoid crash in Supabase SDK
-      new URL(url!);
-      supabase = createClient(url!, key!);
-    } catch (err: any) {
-      console.error("Failed to initialize Supabase client:", err.message);
-      return null;
+// ── Extract all listings from RSC / script payloads ──────────────────────────
+function extractListingsFromText(text: string): any[] {
+  const results: any[] = [];
+  
+  const extractWithBracketCounting = (str: string) => {
+    const list: any[] = [];
+    const targets = ['"listings":', '"results":'];
+    for (const target of targets) {
+      let startIdx = str.indexOf(target);
+      while (startIdx !== -1) {
+        const nextChar = str[startIdx + target.length];
+        if (nextChar === '[' || nextChar === '{') {
+          const openChar = nextChar;
+          const closeChar = nextChar === '[' ? ']' : '}';
+          let count = 1;
+          let endIdx = startIdx + target.length + 1;
+          while (count > 0 && endIdx < str.length) {
+            if (str[endIdx] === openChar) count++;
+            else if (str[endIdx] === closeChar) count--;
+            endIdx++;
+          }
+          const chunkStr = str.substring(startIdx + target.length, endIdx);
+          try {
+            const parsed = JSON.parse(chunkStr);
+            if (Array.isArray(parsed)) {
+              list.push(...parsed);
+            } else if (parsed && typeof parsed === "object") {
+              const found = deepFindListings(parsed);
+              if (found.length > 0) list.push(...found);
+            }
+          } catch {}
+        }
+        startIdx = str.indexOf(target, startIdx + 1);
+      }
+    }
+    return list;
+  };
+
+  // 1. Process as RSC push calls
+  if (text.includes("self.__next_f.push")) {
+    const rscPushRegex = /self\.__next_f\.push\(\s*\[\s*\d+\s*,\s*"([\s\S]*?)"\s*\]\s*\)/g;
+    let match;
+    while ((match = rscPushRegex.exec(text)) !== null) {
+      const rawStr = match[1];
+      try {
+        const jsonCompatibleString = `"${rawStr.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')}"`;
+        const unescaped = JSON.parse(jsonCompatibleString);
+        results.push(...extractWithBracketCounting(unescaped));
+      } catch {}
     }
   }
-  return supabase;
-};
 
-// Scraper Logic
-async function runScraper(state: string, city: string, maxPages = 1) {
-  const supabase = getSupabase();
-  const baseUrl = `https://www.zapimoveis.com.br/venda/imoveis/${state.toLowerCase()}+${city.toLowerCase().replace(/\s+/g, "-")}/`;
-  
-  console.log(`Iniciando scraper para: ${state}/${city} - URL: ${baseUrl}`);
+  // 2. Process whole text with bracket counting
+  results.push(...extractWithBracketCounting(text));
 
-  const crawler = new PlaywrightCrawler({
-    launchContext: {
-      launchOptions: {
-        headless: true,
-      },
-    },
-    // Anti-bot: Use stealth mode and fingerprints (handled internally by Crawlee + Playwright)
-    maxRequestsPerCrawl: 50,
-    minConcurrency: 1,
-    maxConcurrency: 1, // Stay subtle
-    
-    async requestHandler({ page, request, log }) {
-      log.info(`Processando: ${request.url}`);
-      
-      // Simular comportamento humano (scroll)
-      await page.evaluate(async () => {
-        window.scrollBy(0, window.innerHeight);
-        await new Promise(r => setTimeout(r, 1000));
-      });
+  // 3. Process as complete JSON if possible
+  try {
+    const trimmed = text.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      const parsed = JSON.parse(trimmed);
+      results.push(...deepFindListings(parsed));
+    }
+  } catch {}
 
-      const content = await page.content();
-      const $ = cheerio.load(content);
-      const nextDataJson = $("#__NEXT_DATA__").html();
-
-      if (!nextDataJson) {
-        log.error("Script __NEXT_DATA__ não encontrado.");
-        return;
-      }
-
-      try {
-        const data = JSON.parse(nextDataJson);
-        // O mapeamento do Zap Imóveis costuma ficar em:
-        // props -> pageProps -> initialResults -> listings
-        const listings = data?.props?.pageProps?.initialResults?.results?.listings || [];
-        
-        log.info(`Encontrados ${listings.length} imóveis nesta página.`);
-
-        const contacts = listings.map((item: any) => {
-          const l = item.listing || {};
-          const account = l.account || {};
-          
-          return {
-            anunciante_id: account.id || l.id,
-            nome: account.name || "N/A",
-            creci: account.creci || "N/A",
-            telefone: account.phones?.[0] || "",
-            imobiliaria: account.name || "",
-            estado: state.toUpperCase(),
-            cidade: city,
-          };
-        }).filter((c: any) => c.telefone && c.nome !== "N/A");
-
-        if (contacts.length > 0) {
-          // Push to local memory database so it renders instantly
-          for (const c of contacts) {
-            const index = localCorretores.findIndex(r => r.anunciante_id === c.anunciante_id);
-            const item = {
-              id: c.anunciante_id || `loc-${Math.random().toString(36).substring(2, 11)}`,
-              nome: c.nome,
-              creci: c.creci,
-              telefone: c.telefone,
-              estado: c.estado,
-              cidade: c.cidade,
-              imobiliaria: c.imobiliaria,
-              criado_em: new Date().toISOString()
-            };
-            if (index > -1) {
-              localCorretores[index] = item;
-            } else {
-              localCorretores.unshift(item);
-            }
-          }
-
-          if (supabase) {
-            const { error } = await supabase
-              .from("corretores")
-              .upsert(contacts, { onConflict: "anunciante_id" });
-            
-            if (error) log.error(`Erro no Supabase: ${error.message}`);
-            else log.info(`Sucesso: ${contacts.length} registros atualizados no Supabase.`);
-          } else {
-            log.info(`Sucesso: ${contacts.length} registros salvos no banco local.`);
-          }
-        }
-
-        // Paginação manual
-        if (request.userData.page < maxPages) {
-          const nextPage = request.userData.page + 1;
-          const nextUrl = `${baseUrl}?pagina=${nextPage}`;
-          await crawler.addRequests([{
-             url: nextUrl,
-             userData: { page: nextPage }
-          }]);
-        }
-
-      } catch (e: any) {
-        log.error(`Erro ao parsear JSON: ${e.message}`);
-      }
-
-      // Delay aleatório entre 5 e 12 segundos (como solicitado)
-      const delay = Math.floor(Math.random() * (12000 - 5000 + 1) + 5000);
-      await new Promise(r => setTimeout(r, delay));
-    },
-  });
-
-  await crawler.run([{ url: `${baseUrl}?pagina=1`, userData: { page: 1 } }]);
+  return results;
 }
 
+// ── Save search to database ───────────────────────────────────────────────────
+async function saveSearch(state: string, city: string, totalContatos: number) {
+  const record = {
+    id: uuidv4(),
+    estado: state.toUpperCase(),
+    cidade: city.trim(),
+    total_contatos: totalContatos,
+    criado_em: new Date().toISOString(),
+  };
+  // Store in memory (newest first)
+  localBuscas.unshift(record);
+  if (localBuscas.length > 100) localBuscas.pop();
+
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO buscas (id, estado, cidade, total_contatos, criado_em)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    stmt.run(record.id, record.estado, record.cidade, record.total_contatos, record.criado_em);
+    
+    logScraper(`📚 Busca salva no banco de dados SQLite.`);
+  } catch (e: any) {
+    logScraper(`⚠️ SQLite Exception (buscas): ${e.message}`);
+  }
+}
+
+// ── Main scraper ──────────────────────────────────────────────────────────────
+async function runScraper(state: string, city: string, neighborhood = "") {
+  if (scraperRunning) { logScraper("⚠️ Scraper já em execução."); return; }
+  scraperRunning = true;
+  scraperLog = [];
+
+  const citySlug = city.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "-");
+  const stateSlug = state.toLowerCase();
+  const neighborhoodSlug = neighborhood ? neighborhood.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "-") : "";
+
+  logScraper(`🚀 Iniciando captura real: ${state.toUpperCase()}/${city}${neighborhood ? ` - ${neighborhood}` : ""}`);
+
+  let browser: any = null;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      channel: "chrome",
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-blink-features=AutomationControlled",
+        "--disable-infobars",
+        "--window-size=1366,768",
+      ],
+    });
+
+    const seen = new Set<string>();
+    let totalCaptured = 0;
+    const maxPages = 9999;
+    let consecutiveEmpty = 0;
+
+    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+      if (!scraperRunning) {
+        logScraper("🛑 Extração cancelada pelo usuário.");
+        break;
+      }
+      const locationPath = neighborhoodSlug
+        ? `${stateSlug}+${citySlug}+${neighborhoodSlug}`
+        : `${stateSlug}+${citySlug}`;
+      const url = `https://www.zapimoveis.com.br/venda/imoveis/${locationPath}/?pagina=${pageNum}`;
+      logScraper(`📄 Página ${pageNum}...`);
+
+      const context = await browser.newContext({
+        viewport: { width: 1366, height: 768 },
+        userAgent:
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        extraHTTPHeaders: {
+          "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+          "Sec-Ch-Ua":
+            '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+          "Sec-Ch-Ua-Mobile": "?0",
+          "Sec-Ch-Ua-Platform": '"Windows"',
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Sec-Fetch-User": "?1",
+          "Upgrade-Insecure-Requests": "1",
+        },
+      });
+
+      // ── Stealth: mascarar todas as propriedades detectáveis pelo Cloudflare ──
+      await context.addInitScript(() => {
+        // Ocultar webdriver
+        Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+        // Simular plugins de navegador real
+        Object.defineProperty(navigator, "plugins", {
+          get: () => [1, 2, 3, 4, 5],
+        });
+        // Simular idiomas
+        Object.defineProperty(navigator, "languages", {
+          get: () => ["pt-BR", "pt", "en-US", "en"],
+        });
+        // Simular objeto chrome
+        (window as any).chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
+        // Corrigir permissões
+        const origQuery = window.navigator.permissions?.query.bind(window.navigator.permissions);
+        if (origQuery) {
+          (window.navigator.permissions as any).query = (parameters: any) =>
+            parameters.name === "notifications"
+              ? Promise.resolve({ state: Notification.permission })
+              : origQuery(parameters);
+        }
+      });
+
+      const page = await context.newPage();
+      const interceptedListings: any[] = [];
+
+      // ── Interceptar respostas de API de rede (mais robusto que parsear scripts) ──
+      page.on("response", async (response) => {
+        try {
+          const respUrl = response.url();
+          const ct = response.headers()["content-type"] || "";
+          if (
+            ct.includes("application/json") &&
+            (respUrl.includes("zapimoveis") || respUrl.includes("glue-api") || respUrl.includes("vivareal"))
+          ) {
+            const body = await response.json().catch(() => null);
+            if (body) {
+              const found = deepFindListings(body);
+              if (found.length > 0) interceptedListings.push(...found);
+            }
+          }
+        } catch {}
+      });
+
+      try {
+        // Delay aleatório pré-navegação (comportamento humano)
+        await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
+
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+
+        // Verificar e aguardar Cloudflare
+        let blocked = false;
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const title = await page.title();
+          const titleLow = title.toLowerCase();
+          if (!titleLow.includes("attention") && !titleLow.includes("cloudflare") && !titleLow.includes("just a moment")) break;
+          if (attempt === 9) { blocked = true; break; }
+          logScraper(`🛡️ Cloudflare... aguardando (${attempt + 1}/10)`);
+          await page.waitForTimeout(6000);
+        }
+
+        if (blocked) {
+          logScraper(`🔒 IP temporariamente bloqueado pelo Cloudflare. Aguardando 60s antes de tentar novamente...`);
+          await page.close().catch(() => {});
+          await context.close().catch(() => {});
+          await new Promise(r => setTimeout(r, 60000));
+          consecutiveEmpty++;
+          if (consecutiveEmpty >= 3) {
+            logScraper(`⛔ Bloqueio persistente. Encerrando para evitar penalidade maior.`);
+            break;
+          }
+          pageNum--; // retry same page
+          continue;
+        }
+
+        consecutiveEmpty = 0;
+        const title = await page.title();
+        logScraper(`📌 "${title}"`);
+
+        // Aguardar carregamento completo
+        await page.waitForLoadState("networkidle", { timeout: 25000 }).catch(() => {});
+
+        // Simular comportamento humano: scroll e movimento de mouse
+        await page.mouse.move(200 + Math.random() * 700, 100 + Math.random() * 400);
+        await page.waitForTimeout(500 + Math.random() * 800);
+        await page.evaluate(() => window.scrollBy(0, 300 + Math.random() * 400));
+        await page.waitForTimeout(600 + Math.random() * 600);
+
+        // Extrair dados de scripts inline (RSC streaming do Next.js)
+        const scriptTexts = await page
+          .$$eval("script:not([src])", (els) =>
+            els.map((el) => el.textContent || "").filter((t) => t.length > 100)
+          )
+          .catch(() => [] as string[]);
+
+        for (const text of scriptTexts) {
+          if (
+            text.includes("listings") ||
+            text.includes("advertiser") ||
+            text.includes("phone") ||
+            text.includes("self.__next_f")
+          ) {
+            const found = extractListingsFromText(text);
+            if (found.length) {
+              logScraper(`📡 Script inline: ${found.length} listings`);
+              interceptedListings.push(...found);
+            }
+          }
+        }
+
+        // Processar dados coletados (via API ou scripts)
+        if (interceptedListings.length > 0) {
+          const contacts = parseContacts(interceptedListings, state, city, seen);
+          if (contacts.length > 0) {
+            logScraper(`📞 Página ${pageNum}: ${contacts.length} contatos capturados!`);
+            await saveContacts(contacts);
+            totalCaptured += contacts.length;
+          } else {
+            logScraper(`⚠️ Página ${pageNum}: ${interceptedListings.length} listings sem telefone/CRECI.`);
+          }
+        } else {
+          logScraper(`❌ Página ${pageNum}: sem dados. Fim dos resultados.`);
+          break;
+        }
+      } catch (err: any) {
+        logScraper(`❌ Página ${pageNum}: ${err.message}`);
+      } finally {
+        await page.close().catch(() => {});
+        await context.close().catch(() => {});
+      }
+
+      if (pageNum < maxPages && scraperRunning) {
+        const delay = 8000 + Math.random() * 5000;
+        logScraper(`⏳ Aguardando ${Math.round(delay / 1000)}s...`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+
+    logScraper(`🏁 Concluído! ${totalCaptured} contatos reais capturados.`);
+    if (totalCaptured > 0) await saveSearch(state, city, totalCaptured);
+  } catch (err: any) {
+    logScraper(`🔥 Erro crítico: ${err.message}`);
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+    scraperRunning = false;
+  }
+}
+
+// ── Express ───────────────────────────────────────────────────────────────────
 const app = express();
 app.use(express.json());
 
-// API Routes
+// ── Rotas Modularizadas ───────────────────────────────────────────────────────
+app.use("/api/ig", igRouter);
+app.use("/api/gmaps", gmapsRouter);
+
 app.post("/api/scrape", async (req, res) => {
-  console.log("POST /api/scrape received");
-  const { state, city } = req.body;
+  const { state, city, neighborhood } = req.body;
   if (!state || !city) return res.status(400).json({ error: "Estado e Cidade são obrigatórios." });
+  if (scraperRunning) return res.json({ message: "Extração já em andamento. Aguarde...", running: true });
 
-  // APENAS INICIAR O CRAWLER REAL - sem gerar dados simulados.
-  console.log(`Iniciando crawler real para: ${state}/${city}`);
-
-  // 3. Fire up the background crawler to attempt real web scraping too
-  if (!process.env.VERCEL) {
-    runScraper(state, city, 2).catch(console.error);
-  } else {
-    console.log("Running on Vercel Serverless: skipping background scraping.");
-  }
-
-  res.json({ message: "Motor de busca de corretores iniciado. Capturando registros..." });
+  runScraper(state, city, neighborhood).catch(console.error);
+  res.json({
+    message: `🚀 Captura real iniciada para ${state.toUpperCase()}/${city}${neighborhood ? ` - ${neighborhood}` : ""}. Contatos aparecerão em instantes...`,
+    running: true,
+  });
 });
 
-app.get("/api/corretores", async (req, res) => {
-  console.log("GET /api/corretores received");
-  const supabase = getSupabase();
-  if (!supabase) {
-    console.log("No Supabase available, returning local database.");
-    // Sort localCorretores by criado_em descending
-    localCorretores.sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
-    return res.json(localCorretores);
+app.post("/api/stop", (_req, res) => {
+  if (scraperRunning) {
+    scraperRunning = false;
+    res.json({ message: "Sinal de parada enviado. Encerrando página atual..." });
+  } else {
+    res.json({ message: "Nenhuma extração em andamento." });
+  }
+});
+
+app.get("/api/scrape-status", (_req, res) => {
+  res.json({ running: scraperRunning, log: scraperLog.slice(0, 30) });
+});
+
+app.get("/api/corretores", async (_req, res) => {
+  try {
+    const data = db.prepare("SELECT * FROM corretores ORDER BY criado_em DESC").all();
+    const combined = [...(data || [])];
+    for (const local of localCorretores) {
+      if (!combined.some((r: any) => r.anunciante_id === local.anunciante_id)) combined.push(local);
+    }
+    combined.sort((a: any, b: any) =>
+      new Date(b.criado_em || 0).getTime() - new Date(a.criado_em || 0).getTime()
+    );
+    return res.json(combined);
+  } catch (e) { 
+    return res.json(localCorretores); 
+  }
+});
+
+// ── Saved searches endpoints ─────────────────────────────────────────────────
+app.get("/api/buscas", async (_req, res) => {
+  try {
+    const data = db.prepare("SELECT * FROM buscas ORDER BY criado_em DESC LIMIT 50").all();
+    return res.json(data || localBuscas);
+  } catch (e) { 
+    return res.json(localBuscas); 
+  }
+});
+
+// Load a saved search's contacts by state+city
+app.post("/api/buscas/load", async (req, res) => {
+  const { state, city } = req.body;
+  if (!state || !city) return res.status(400).json({ error: "state e city são obrigatórios" });
+
+  try {
+    const data = db.prepare("SELECT * FROM corretores WHERE estado = ? AND cidade LIKE ? ORDER BY criado_em DESC").all(state.toUpperCase(), `%${city}%`);
+    return res.json(data || []);
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete a saved search and its corresponding contacts
+app.delete("/api/buscas/:id", async (req, res) => {
+  const { id } = req.params;
+  const estado = req.query.estado as string;
+  const cidade = req.query.cidade as string;
+
+  if (!id) return res.status(400).json({ error: "ID da busca é obrigatório" });
+
+  // 1. Remove from in-memory searches
+  localBuscas = localBuscas.filter(b => b.id !== id);
+
+  // 2. Remove associated contacts from in-memory if state and city are provided
+  if (estado && cidade) {
+    localCorretores = localCorretores.filter(
+      c => !(c.estado === estado.toUpperCase() && c.cidade.toLowerCase() === cidade.toLowerCase())
+    );
   }
 
   try {
-    const { data, error } = await supabase
-      .from("corretores")
-      .select("*")
-      .order("criado_em", { ascending: false });
+    // 3. Delete from "buscas" table
+    db.prepare("DELETE FROM buscas WHERE id = ?").run(id);
 
-    if (error) {
-      console.error("Supabase query error:", error.message);
-      // Fallback to local
-      localCorretores.sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
-      return res.json(localCorretores);
+    // 4. Delete from "corretores" table
+    if (estado && cidade) {
+      db.prepare("DELETE FROM corretores WHERE estado = ? AND cidade LIKE ?").run(estado.toUpperCase(), `%${cidade}%`);
     }
-
-    // Merge remote real data and local data (eliminate duplicates)
-    const combined = [...(data || [])];
-    for (const local of localCorretores) {
-      const exists = combined.some(r => r.anunciante_id === local.anunciante_id);
-      if (!exists) {
-        combined.push(local);
-      }
-    }
-
-    // Sort by criado_em descending
-    combined.sort((a, b) => new Date(b.criado_em || 0).getTime() - new Date(a.criado_em || 0).getTime());
-
-    return res.json(combined);
   } catch (err: any) {
-    console.error("Failed to fetch from remote Supabase:", err.message);
-    localCorretores.sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
-    return res.json(localCorretores);
+    console.error("Erro ao excluir busca no SQLite:", err);
+    return res.status(500).json({ error: "Erro ao excluir busca do banco de dados." });
+  }
+
+  res.json({ message: "Busca e contatos associados excluídos com sucesso." });
+});
+
+app.post("/api/corretores/:id/msg_enviada", async (req, res) => {
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ error: "ID é obrigatório" });
+
+  // Update in memory if it exists
+  const corretorIndex = localCorretores.findIndex(c => c.id === id);
+  if (corretorIndex > -1) {
+    localCorretores[corretorIndex].msg_enviada = 1;
+  }
+
+  try {
+    const stmt = db.prepare("UPDATE corretores SET msg_enviada = 1 WHERE id = ?");
+    const info = stmt.run(id);
+    if (info.changes === 0) {
+      return res.status(404).json({ error: "Corretor não encontrado." });
+    }
+    res.json({ message: "Status atualizado com sucesso." });
+  } catch (err: any) {
+    console.error("Erro ao atualizar msg_enviada:", err);
+    res.status(500).json({ error: "Erro interno no servidor." });
   }
 });
 
+app.delete("/api/corretores", async (req, res) => {
+  const estado = req.query.estado as string;
+  const cidade = req.query.cidade as string;
+
+  if (!estado || !cidade) {
+    return res.status(400).json({ error: "Estado e Cidade são obrigatórios para limpar a base." });
+  }
+
+  // Clear from in-memory array for this specific city
+  localCorretores = localCorretores.filter(
+    c => !(c.estado === estado.toUpperCase() && c.cidade.toLowerCase() === cidade.toLowerCase())
+  );
+
+  try {
+    db.prepare("DELETE FROM corretores WHERE estado = ? AND cidade LIKE ?").run(estado.toUpperCase(), `%${cidade}%`);
+    
+    // Also delete the "busca salva" record for this city to keep things consistent when a new scrape starts
+    db.prepare("DELETE FROM buscas WHERE estado = ? AND cidade LIKE ?").run(estado.toUpperCase(), `%${cidade}%`);
+    
+    localBuscas = localBuscas.filter(
+      b => !(b.estado === estado.toUpperCase() && b.cidade.toLowerCase() === cidade.toLowerCase())
+    );
+  } catch (err: any) {
+    console.error("Erro ao limpar banco SQLite:", err);
+    return res.status(500).json({ error: "Erro ao limpar banco de dados." });
+  }
+  
+  res.json({ message: `Base limpa para ${estado}/${cidade}.` });
+});
+
+// ── Dev server ────────────────────────────────────────────────────────────────
 if (!process.env.VERCEL) {
   const startLocalServer = async () => {
     if (process.env.NODE_ENV !== "production") {
-      console.log("Starting server in DEVELOPMENT mode with Vite middleware");
-      const vite = await createViteServer({
-        server: { middlewareMode: true },
-        appType: "spa",
-      });
+      console.log("🌐 Modo DESENVOLVIMENTO — Vite middleware ativo");
+      const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
       app.use(vite.middlewares);
     } else {
-      console.log("Starting server in PRODUCTION mode");
       const distPath = path.join(process.cwd(), "dist");
       app.use(express.static(distPath));
-      app.get("*", (req, res) => {
-        res.sendFile(path.join(distPath, "index.html"));
-      });
+      app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
     }
-
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server listening on port ${PORT}`);
-    });
+    app.listen(PORT, "0.0.0.0", () =>
+      console.log(`✅ Servidor rodando em http://localhost:${PORT}`)
+    );
   };
-
-  startLocalServer().catch(err => {
-    console.error("Failed to start local server:", err);
-  });
+  startLocalServer().catch(console.error);
 }
 
 export default app;

@@ -1,342 +1,414 @@
-import React, { useState, useEffect } from "react";
-import { 
-  Search, 
-  MapPin, 
-  Phone, 
-  User, 
-  MessageCircle, 
-  Database, 
-  Play, 
-  RefreshCcw,
-  Zap,
-  CheckCircle2,
-  AlertCircle
-} from "lucide-react";
+// ─────────────────────────────────────────────────────────────────────────────
+// App.tsx — Shell principal: roteamento entre módulos + sidebar accordion
+// Não contém lógica de negócio — apenas navega entre módulos isolados.
+// ─────────────────────────────────────────────────────────────────────────────
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import {
+  Database,
+  History,
+  ChevronRight,
+  Instagram,
+  Search,
+  CheckCircle2,
+  MapPin,
+} from "lucide-react";
 
-interface Corretor {
-  id: string;
-  nome: string;
-  creci: string;
-  telefone: string;
-  estado: string;
-  cidade: string;
-  imobiliaria: string;
-  criado_em: string;
-}
+import ZapImoveisDashboard, { ZapStatus } from "./modules/zapimoveis/ZapImoveisDashboard";
+import InstagramDashboard from "./modules/instagram/InstagramDashboard";
+import LeadsDashboard from "./modules/instagram/LeadsDashboard";
+import GoogleMapsDashboard from "./modules/googlemaps/GoogleMapsDashboard";
 
-const UF_LIST = [
-  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", 
-  "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"
-];
+// null = nenhum módulo ativo (tela inicial/splash)
+type Module = "zapimoveis" | "instagram" | "googlemaps" | null;
 
-// Mock de cidades populares por estado para facilitar o protótipo
-const CITIES_BY_UF: Record<string, string[]> = {
-  SP: ["São Paulo", "Campinas", "Santos", "Ribeirão Preto"],
-  RJ: ["Rio de Janeiro", "Niterói", "Búzios", "Petrópolis"],
-  MG: ["Belo Horizonte", "Uberlândia", "Ouro Preto"],
-  PR: ["Curitiba", "Londrina", "Maringá"],
-  SC: ["Florianópolis", "Balneário Camboriú", "Joinville"],
-};
-
-export default function App() {
-  const [state, setState] = useState("RJ");
-  const [city, setCity] = useState("Niterói");
-  const [corretores, setCorretores] = useState<Corretor[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [scrapingStatus, setScrapingStatus] = useState<string | null>(null);
-  const [isLive, setIsLive] = useState(true);
-
-  const fetchCorretores = async () => {
-    try {
-      const res = await fetch("/api/corretores");
-      if (!res.ok) {
-        const text = await res.text();
-        console.error(`API Error (${res.status}):`, text.substring(0, 100));
-        return;
-      }
-      const data = await res.json();
-      setCorretores(data);
-    } catch (err) {
-      console.error("Erro ao buscar corretores:", err);
-    }
-  };
+// ── WelcomeScreen inline (com vídeo embutido) ─────────────────────────────────
+function WelcomeScreen() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [ended, setEnded] = useState(false);
 
   useEffect(() => {
-    fetchCorretores();
-    let interval: any;
-    if (isLive) {
-      interval = setInterval(fetchCorretores, 5000);
-    }
-    return () => clearInterval(interval);
-  }, [isLive]);
+    const video = videoRef.current;
+    if (!video) return;
 
-  const startScrape = async () => {
-    setLoading(true);
-    setScrapingStatus("Iniciando motor de busca...");
-    try {
-      const res = await fetch("/api/scrape", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state, city }),
-      });
-      const data = await res.json();
-      setScrapingStatus(data.message);
-      setTimeout(() => setScrapingStatus(null), 5000);
-    } catch (err) {
-      setScrapingStatus("Erro ao iniciar captura.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const handleEnded = () => {
+      // Deixa o vídeo parado no último frame — não faz nada além de marcar como terminado
+      setEnded(true);
+    };
 
-  const getWhatsAppUrl = (phone: string) => {
-    const cleanPhone = phone.replace(/\D/g, "");
-    return `https://wa.me/55${cleanPhone}`;
-  };
+    video.addEventListener("ended", handleEnded);
+    video.play().catch(() => setEnded(true));
+
+    return () => video.removeEventListener("ended", handleEnded);
+  }, []);
 
   return (
-    <div className="flex h-screen w-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-slate-800 bg-slate-950 flex flex-col shrink-0">
-        <div className="p-6 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-sky-500 rounded flex items-center justify-center font-bold text-slate-950 shadow-lg shadow-sky-500/20">Z</div>
-            <h1 className="text-xl font-bold tracking-tight text-white">Z-Scraper</h1>
-          </div>
-          <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-semibold">v1.0.4-stable</p>
-        </div>
-        
-        <nav className="flex-1 px-4 space-y-2 mt-4">
-          <button className="w-full flex items-center gap-3 px-3 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium transition-all">
-            <Database className="w-4 h-4 text-sky-400" />
-            Dashboard
-          </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white rounded-lg text-sm transition-all group">
-            <Zap className="w-4 h-4 group-hover:text-yellow-400 transition-colors" />
-            Extração Ativa
-          </button>
-        </nav>
+    <div className="flex-1 flex flex-col items-center justify-center bg-slate-950 select-none gap-8">
 
-        <div className="p-4 mt-auto">
-          <div className="glass rounded-xl p-4 space-y-3">
-            <div className="flex items-center justify-between text-[10px] uppercase tracking-wider font-bold">
-              <span className="text-slate-400">Status Scraper</span>
-              <span className="flex items-center gap-1.5 text-emerald-400">
-                <span className={`w-2 h-2 rounded-full ${loading ? 'bg-yellow-400 animate-pulse' : 'bg-emerald-400 animate-status-pulse'}`}></span>
-                {loading ? 'Running' : 'Idle'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-[10px] uppercase tracking-wider font-bold">
-              <span className="text-slate-400">Modo Live</span>
-              <button 
-                onClick={() => setIsLive(!isLive)}
-                className={`px-2 py-0.5 rounded text-[9px] ${isLive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}
-              >
-                {isLive ? 'ON' : 'OFF'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </aside>
+      {/* Vídeo — Mantendo a largura total, mas ocultando as bordas superior e inferior (onde fica o "Veo") */}
+      <div className="w-4/5 aspect-[2.3/1] overflow-hidden rounded-2xl shadow-2xl relative bg-slate-950 flex items-center justify-center">
+        <video
+          ref={videoRef}
+          src="/intro.mp4"
+          muted
+          playsInline
+          preload="auto"
+          className="w-full h-auto absolute"
+        />
+      </div>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col bg-slate-950 p-8 overflow-hidden">
-        <header className="flex justify-between items-start mb-8 shrink-0">
-          <div>
-            <h2 className="text-3xl font-bold text-white tracking-tight">Painel de Leads</h2>
-            <p className="text-slate-400 text-sm mt-1">Filtre e extraia contatos reais em tempo real do Zap Imóveis.</p>
-          </div>
-          <div className="flex gap-6 items-center">
-            <div className="text-right">
-              <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Total Capturado</p>
-              <p className="text-2xl font-bold text-sky-400 font-mono leading-none">{corretores.length.toLocaleString()}</p>
-            </div>
-            <div className="h-10 w-[1px] bg-slate-800"></div>
-            <div className="text-right">
-              <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Bypass Cloudflare</p>
-              <p className="text-2xl font-bold text-emerald-400 font-mono leading-none">ACTIVE</p>
-            </div>
-          </div>
-        </header>
-
-        {/* Filter Section */}
-        <section className="shrink-0 mb-8">
-          <div className="glass rounded-2xl p-6 flex items-end gap-6 shadow-2xl">
-            <div className="flex-1 space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Estado (UF)</label>
-              <div className="relative">
-                <select 
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-sky-500/50 outline-none appearance-none cursor-pointer transition-all hover:border-slate-600"
-                >
-                  {UF_LIST.map(uf => <option key={uf} value={uf}>{uf}</option>)}
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
-              </div>
-            </div>
-            <div className="flex-1 space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Cidade</label>
-              <input 
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Ex: Niterói"
-                className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-sky-500/50 outline-none transition-all hover:border-slate-600 placeholder:text-slate-600"
-              />
-            </div>
-            <button 
-              onClick={startScrape}
-              disabled={loading}
-              className="h-[52px] px-8 bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-black rounded-xl transition-all flex items-center gap-2 active:scale-[0.98] shadow-lg shadow-sky-500/20 uppercase text-xs tracking-widest"
-            >
-              {loading ? (
-                <RefreshCcw className="w-4 h-4 animate-spin text-slate-950" />
-              ) : (
-                <>
-                  <span>Iniciar Captura</span>
-                  <Play className="w-4 h-4 fill-current" />
-                </>
-              )}
-            </button>
-          </div>
-          
-          <AnimatePresence>
-            {scrapingStatus && (
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="mt-4 bg-sky-500/10 border border-sky-500/30 px-6 py-3 rounded-xl flex items-center gap-3 text-sky-400 text-sm font-medium"
-              >
-                <div className="w-2 h-2 bg-sky-500 rounded-full animate-pulse"></div>
-                {scrapingStatus}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </section>
-
-        {/* Leads Table Section */}
-        <section className="flex-1 glass rounded-2xl flex flex-col overflow-hidden shadow-2xl relative">
-          <div className="border-b border-slate-800 px-6 py-5 flex justify-between items-center bg-slate-900/40">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-slate-800 rounded-lg">
-                <Database className="w-4 h-4 text-sky-500" />
-              </div>
-              <h3 className="font-bold text-white uppercase tracking-tight text-sm">Base de Corretores Capturados</h3>
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={fetchCorretores}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all"
-                title="Sincronizar agora"
-              >
-                <RefreshCcw className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="min-w-[800px]">
-              {/* Header Grid */}
-              <div className="grid grid-cols-12 text-[10px] uppercase font-black tracking-widest text-slate-500 border-b border-slate-800 sticky top-0 bg-slate-900/95 backdrop-blur-md z-10 px-6 py-5">
-                <div className="col-span-4">Nome / Imobiliária</div>
-                <div className="col-span-2">CRECI</div>
-                <div className="col-span-2">Região</div>
-                <div className="col-span-2">Contato</div>
-                <div className="col-span-2 text-right pr-6">Ação</div>
-              </div>
-
-              {/* Body Rows */}
-              <div className="divide-y divide-slate-800/40">
-                <AnimatePresence mode="popLayout">
-                  {corretores.length === 0 ? (
-                    <motion.div 
-                      initial={{ opacity: 0 }} 
-                      animate={{ opacity: 1 }}
-                      className="px-6 py-32 text-center text-slate-600 italic font-medium"
-                    >
-                      Aguardando dados... Preencha os campos e inicie uma captura.
-                    </motion.div>
-                  ) : (
-                    corretores.map((corretor) => (
-                      <motion.div 
-                        layout
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, scale: 0.98 }}
-                        key={corretor.id} 
-                        className="grid grid-cols-12 items-center px-6 py-4 hover:bg-white/5 transition-all group"
-                      >
-                        <div className="col-span-4 font-medium flex flex-col">
-                          <span className="text-white text-sm group-hover:text-sky-400 transition-colors uppercase tracking-tight font-semibold">
-                            {corretor.nome}
-                          </span>
-                          <span className="text-[9px] text-slate-500 uppercase tracking-widest font-black mt-0.5">
-                            {corretor.imobiliaria || "Corretor Independente"}
-                          </span>
-                        </div>
-                        
-                        <div className="col-span-2 select-all">
-                          <span className="inline-block text-[11px] font-mono text-slate-400 bg-slate-800/80 px-2 py-1 rounded border border-slate-700/50">
-                            {corretor.creci || "N/A"}
-                          </span>
-                        </div>
-                        
-                        <div className="col-span-2">
-                          <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium lowercase first-letter:uppercase">
-                            <MapPin className="w-3 h-3 text-slate-700" />
-                            {corretor.cidade} - {corretor.estado}
-                          </div>
-                        </div>
-                        
-                        <div className="col-span-2 select-all">
-                          <div className="text-sky-400 font-mono font-bold text-sm tracking-tight">
-                            {corretor.telefone}
-                          </div>
-                        </div>
-                        
-                        <div className="col-span-2 text-right pr-6">
-                          <a 
-                            href={getWhatsAppUrl(corretor.telefone)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-black uppercase tracking-tighter hover:bg-emerald-500 hover:text-slate-950 hover:border-emerald-500 transition-all active:scale-95"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5" />
-                            WhatsApp
-                          </a>
-                        </div>
-                      </motion.div>
-                    ))
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center text-[10px] uppercase font-black shrink-0">
-            <div className="flex gap-6 text-slate-500">
-              <span className="flex items-center gap-2">Mapeamento <b className="text-slate-300 font-mono">__NEXT_DATA__</b></span>
-              <span className="flex items-center gap-2">Crawler <b className="text-slate-300 font-mono">PLAYWRIGHT</b></span>
-            </div>
-            <div className="flex items-center gap-1.5 text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Cloudflare Bypass Active
-            </div>
-          </div>
-        </section>
-      </main>
+      {/* Instrução + seta — sempre visíveis */}
+      <div className="flex flex-col items-center gap-3 text-center">
+        <p className="text-slate-400 text-sm leading-relaxed">
+          Selecione um módulo no menu lateral para começar.
+        </p>
+        <motion.div
+          animate={{ x: [-6, 0, -6] }}
+          transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
+          className="flex items-center gap-2 text-slate-600 text-xs uppercase tracking-widest font-bold"
+        >
+          <ChevronRight className="w-4 h-4 rotate-180" />
+          Menu lateral
+        </motion.div>
+      </div>
     </div>
   );
 }
 
-// Sub-components ou imports auxiliares que precisam ser declarados no mesmo arquivo para evitar erros
-function ChevronDown(props: any) {
-  return <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>;
-}
 
-function ShieldCheck(props: any) {
-  return <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>;
+// ── App ───────────────────────────────────────────────────────────────────────
+export default function App() {
+  // Nenhum módulo ativo ao iniciar — menus fechados
+  const [activeModule, setActiveModule] = useState<Module>(null);
+  const [zapExpanded, setZapExpanded] = useState(false);
+  const [instaExpanded, setInstaExpanded] = useState(false);
+  const [mapsExpanded, setMapsExpanded] = useState(false);
+
+  // Estado de status do ZapImóveis exposto ao sidebar via callback
+  const [zapStatus, setZapStatus] = useState<ZapStatus>({
+    running: false,
+    isLive: true,
+    buscasCount: 0,
+    showLog: false,
+  });
+
+  // Pedido de seção para o módulo ZapImóveis (log / buscas / null)
+  const [zapSectionRequest, setZapSectionRequest] = useState<string | null>(null);
+
+  // Pedido de seção para o módulo Instagram
+  const [igSectionRequest, setIgSectionRequest] = useState<string>("profile");
+
+  // Pedido de seção para o módulo Google Maps
+  const [mapsSectionRequest, setMapsSectionRequest] = useState<string | null>(null);
+
+  const handleZapStatusChange = useCallback((status: ZapStatus) => {
+    setZapStatus(status);
+  }, []);
+
+  const openZapSection = (section: string | null) => {
+    setActiveModule("zapimoveis");
+    setZapExpanded(true);
+    setInstaExpanded(false);
+    setMapsExpanded(false);
+    setZapSectionRequest(null);
+    setTimeout(() => setZapSectionRequest(section), 0);
+  };
+
+  const toggleZap = () => {
+    const next = !zapExpanded;
+    setZapExpanded(next);
+    if (next) {
+      setActiveModule("zapimoveis");
+      setInstaExpanded(false);
+      setMapsExpanded(false);
+    }
+  };
+
+  const toggleInstagram = () => {
+    const next = !instaExpanded;
+    setInstaExpanded(next);
+    if (next) {
+      setActiveModule("instagram");
+      setZapExpanded(false);
+      setMapsExpanded(false);
+    }
+  };
+
+  const toggleMaps = () => {
+    const next = !mapsExpanded;
+    setMapsExpanded(next);
+    if (next) {
+      setActiveModule("googlemaps");
+      setZapExpanded(false);
+      setInstaExpanded(false);
+    }
+  };
+
+  const openIgSection = (section: string) => {
+    setActiveModule("instagram");
+    setInstaExpanded(true);
+    setZapExpanded(false);
+    setMapsExpanded(false);
+    setIgSectionRequest(section);
+  };
+
+  const openMapsSection = (section: string | null) => {
+    setActiveModule("googlemaps");
+    setMapsExpanded(true);
+    setZapExpanded(false);
+    setInstaExpanded(false);
+    setMapsSectionRequest(null);
+    setTimeout(() => setMapsSectionRequest(section), 0);
+  };
+
+  return (
+    <div className="flex h-screen w-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
+      {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
+      <aside className="w-64 border-r border-slate-800 bg-slate-950 flex flex-col shrink-0">
+        {/* Logo — Clicável para voltar à Home */}
+        <button 
+          onClick={() => {
+            setActiveModule(null);
+            setZapExpanded(false);
+            setInstaExpanded(false);
+            setMapsExpanded(false);
+          }}
+          className="p-6 border-b border-slate-800 text-left hover:bg-slate-900/50 transition-colors w-full cursor-pointer group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-sky-500 rounded flex items-center justify-center font-bold text-slate-950 shadow-lg shadow-sky-500/20 group-hover:scale-105 transition-transform">
+              Z
+            </div>
+            <h1 className="text-xl font-bold tracking-tight text-white group-hover:text-sky-400 transition-colors">Z-Scraper</h1>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-semibold">
+            v1.1.0-real
+          </p>
+        </button>
+
+        {/* Nav acordeão */}
+        <nav className="flex-1 overflow-y-auto py-3 space-y-1">
+
+          {/* ── Dashboard ZapImóveis ── */}
+          <div>
+            <button
+              onClick={toggleZap}
+              className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-bold transition-all ${
+                activeModule === "zapimoveis"
+                  ? "text-sky-400"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-6 h-6 rounded flex items-center justify-center shadow-sm overflow-hidden ${
+                  activeModule === "zapimoveis"
+                    ? "shadow-sky-500/30 border border-sky-500/50"
+                    : "border border-transparent"
+                }`}>
+                  <img src="/download.png" className="w-full h-full object-cover scale-[1.35] bg-transparent" alt="Zap" />
+                </div>
+                <span className="uppercase tracking-widest text-[11px]">Dashboard ZapImóveis</span>
+              </div>
+              <motion.div animate={{ rotate: zapExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                <ChevronRight className="w-4 h-4" />
+              </motion.div>
+            </button>
+
+            <AnimatePresence initial={false}>
+              {zapExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
+                  <div className="pl-4 pb-2 space-y-0.5">
+                    <button
+                      onClick={() => openZapSection(null)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        activeModule === "zapimoveis"
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                      }`}
+                    >
+                      <Database className="w-4 h-4 text-sky-400" />
+                      Dashboard
+                    </button>
+
+                    {zapStatus.buscasCount > 0 && (
+                      <button
+                        onClick={() => openZapSection("buscas")}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white rounded-lg text-sm transition-all group"
+                      >
+                        <History className="w-4 h-4 group-hover:text-purple-400 transition-colors" />
+                        Buscas Salvas
+                        <span className="ml-auto text-[9px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded-full font-bold">
+                          {zapStatus.buscasCount}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* ── Dashboard Instagram ── */}
+          <div>
+            <button
+              onClick={toggleInstagram}
+              className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-bold transition-all ${
+                activeModule === "instagram"
+                  ? "text-pink-400"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-6 h-6 rounded flex items-center justify-center shadow-sm ${
+                  activeModule === "instagram"
+                    ? "bg-gradient-to-br from-pink-500 to-purple-500 shadow-pink-500/30"
+                    : "bg-slate-800"
+                }`}>
+                  <Instagram className="w-3.5 h-3.5 text-white" />
+                </div>
+                <span className="uppercase tracking-widest text-[11px]">Dashboard Instagram</span>
+              </div>
+              <motion.div animate={{ rotate: instaExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                <ChevronRight className="w-4 h-4" />
+              </motion.div>
+            </button>
+
+            <AnimatePresence initial={false}>
+              {instaExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
+                  <div className="pl-4 pb-2 space-y-0.5">
+                    {[
+                      { id: "profile", label: "Profile Scraper", icon: Search },
+                      { id: "leads", label: "Leads Qualificados", icon: CheckCircle2 },
+                    ].map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => openIgSection(item.id)}
+                        className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm transition-all group ${
+                          igSectionRequest === item.id && activeModule === "instagram"
+                            ? "bg-slate-900 text-white"
+                            : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <item.icon className={`w-3.5 h-3.5 ${igSectionRequest === item.id && activeModule === "instagram" ? "text-pink-400" : "group-hover:text-pink-400"}`} />
+                          <span>{item.label}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* ── Dashboard Google Maps ── */}
+          <div>
+            <button
+              onClick={toggleMaps}
+              className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-bold transition-all ${
+                activeModule === "googlemaps"
+                  ? "text-yellow-400"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-6 h-6 rounded flex items-center justify-center shadow-sm ${
+                  activeModule === "googlemaps"
+                    ? "bg-[#E60000] shadow-[#E60000]/30 text-yellow-400"
+                    : "bg-slate-800 text-slate-400"
+                }`}>
+                  <MapPin className="w-3.5 h-3.5" />
+                </div>
+                <span className="uppercase tracking-widest text-[11px]">Dashboard Google Maps</span>
+              </div>
+              <motion.div animate={{ rotate: mapsExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                <ChevronRight className="w-4 h-4" />
+              </motion.div>
+            </button>
+
+            <AnimatePresence initial={false}>
+              {mapsExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
+                  <div className="pl-4 pb-2 space-y-0.5">
+                    <button
+                      onClick={() => openMapsSection(null)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        activeModule === "googlemaps" && !mapsSectionRequest
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                      }`}
+                    >
+                      <Database className="w-4 h-4 text-blue-400" />
+                      Dashboard
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+        </nav>
+      </aside>
+
+      {/* ── Conteúdo principal ─────────────────────────────────────────────── */}
+      <div className="flex-1 relative flex overflow-hidden">
+        {/* Welcome screen (vídeo + logo estática + instruções) */}
+        <AnimatePresence>
+          {activeModule === null && (
+            <motion.div
+              key="welcome"
+              className="absolute inset-0 flex overflow-hidden bg-slate-950 z-10"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <WelcomeScreen />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ZapImóveis — sempre montado para preservar estado, visibilidade por CSS */}
+        <div className={`absolute inset-0 flex overflow-hidden ${activeModule === "zapimoveis" ? "" : "hidden"}`}>
+          <ZapImoveisDashboard
+            sectionRequest={zapSectionRequest}
+            onStatusChange={handleZapStatusChange}
+          />
+        </div>
+
+        {/* Instagram */}
+        <div className={`absolute inset-0 flex overflow-hidden ${activeModule === "instagram" ? "" : "hidden"}`}>
+          {igSectionRequest === "leads" ? (
+            <LeadsDashboard sectionRequest={igSectionRequest} />
+          ) : (
+            <InstagramDashboard sectionRequest={igSectionRequest} />
+          )}
+        </div>
+
+        {/* Google Maps */}
+        <div className={`absolute inset-0 flex overflow-hidden ${activeModule === "googlemaps" ? "" : "hidden"}`}>
+          <GoogleMapsDashboard sectionRequest={mapsSectionRequest} />
+        </div>
+      </div>
+    </div>
+  );
 }

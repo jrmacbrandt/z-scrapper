@@ -14,17 +14,30 @@ CREATE TABLE IF NOT EXISTS corretores (
     criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 2. Criar índices para busca rápida
+-- 2. Criar a tabela de buscas salvas
+CREATE TABLE IF NOT EXISTS buscas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    estado VARCHAR(2) NOT NULL,
+    cidade VARCHAR(255) NOT NULL,
+    total_contatos INTEGER DEFAULT 0,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. Criar índices para busca rápida
 CREATE INDEX IF NOT EXISTS idx_corretores_estado_cidade ON corretores(estado, cidade);
 CREATE INDEX IF NOT EXISTS idx_corretores_anunciante_id ON corretores(anunciante_id);
+CREATE INDEX IF NOT EXISTS idx_buscas_criado_em ON buscas(criado_em DESC);
 
--- 3. Habilitar Realtime (Opcional, para a tabela aparecer no dashboard em tempo real)
+-- 4. Habilitar Realtime (Opcional, para a tabela aparecer no dashboard em tempo real)
 ALTER PUBLICATION supabase_realtime ADD TABLE corretores;
 
--- 4. Políticas de Segurança (RLS)
+-- 5. Políticas de Segurança (RLS)
 -- Por padrão, vamos permitir leitura e escrita para testes. 
 -- Para produção, configure conforme necessário.
 ALTER TABLE corretores ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Allow public access" ON corretores
+FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE buscas ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public access buscas" ON buscas
 FOR ALL USING (true) WITH CHECK (true);

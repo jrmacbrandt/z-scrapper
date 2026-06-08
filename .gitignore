@@ -8,3 +8,13 @@ coverage/
 !.env.example
 
 .vercel
+
+# Project specific ignores
+*.sqlite
+*.sqlite-*
+storage/
+test-*.js
+test-*.cjs
+*.png
+dist-installer/
+installer/
