@@ -25,8 +25,7 @@ const router = Router();
 const phoneUtil = libphonenumber.PhoneNumberUtil.getInstance();
 const PhoneNumberFormat = libphonenumber.PhoneNumberFormat;
 
-// Disable TLS reject globally for scrapers
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+// TLS: desabilitado por request via httpsAgent em pingWebsite (não globalmente)
 
 async function pingWebsite(url: string | null): Promise<string> {
   if (!url) return "Sem Website";

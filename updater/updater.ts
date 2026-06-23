@@ -70,6 +70,55 @@ const ROOT = process.cwd();
 const MANIFEST_URL =
   "https://raw.githubusercontent.com/jrmacbrandt/z-scrapper/main/updates/manifest.json";
 
+// Token GitHub para repositórios privados (opcional — definir GITHUB_TOKEN no .env)
+// Se o repositório for público, deixar vazio.
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN ?? "";
+
+function getRequestUrl(url: string): string {
+  if (!GITHUB_TOKEN) return url;
+  
+  const rawPrefix = "https://raw.githubusercontent.com/";
+  if (url.startsWith(rawPrefix)) {
+    const parts = url.slice(rawPrefix.length).split("/");
+    if (parts.length >= 4) {
+      const owner = parts[0];
+      const repo = parts[1];
+      const branch = parts[2];
+      const filePath = parts.slice(3).join("/");
+      return `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${branch}`;
+    }
+  }
+  return url;
+}
+
+function getGitHubHeaders(url: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "User-Agent": "z-scraper-updater/1.0",
+  };
+  
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith("github.com")) {
+      if (parsed.hostname === "api.github.com") {
+        headers["Accept"] = "application/vnd.github.v3.raw";
+      }
+      if (GITHUB_TOKEN) {
+        headers["Authorization"] = `token ${GITHUB_TOKEN}`;
+      }
+    } else if (parsed.hostname.endsWith("githubusercontent.com")) {
+      if (GITHUB_TOKEN) {
+        headers["Authorization"] = `token ${GITHUB_TOKEN}`;
+      }
+    }
+  } catch {
+    if (GITHUB_TOKEN) {
+      headers["Authorization"] = `token ${GITHUB_TOKEN}`;
+    }
+  }
+  
+  return headers;
+}
+
 const MODULES_DIR  = path.join(ROOT, "modules");
 const UPDATER_DIR  = path.join(ROOT, "updater");
 const TEMP_DIR     = path.join(UPDATER_DIR, "temp");
@@ -115,54 +164,68 @@ function semverGt(a: string, b: string): boolean {
 
 function httpsGet(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 15000 }, (res) => {
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        // Follow redirect
-        httpsGet(res.headers.location).then(resolve).catch(reject);
-        return;
-      }
-      if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode} ao baixar ${url}`));
-        return;
-      }
-      const chunks: Buffer[] = [];
-      res.on("data", (c: Buffer) => chunks.push(c));
-      res.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
-      res.on("error", reject);
-    });
-    req.on("timeout", () => { req.destroy(); reject(new Error("Timeout")); });
-    req.on("error", reject);
+    const doGet = (u: string) => {
+      const options = {
+        timeout: 15000,
+        headers: getGitHubHeaders(u),
+      };
+      const req = https.get(u, options, (res) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          doGet(res.headers.location);
+          return;
+        }
+        if (res.statusCode === 404) {
+          reject(new Error(
+            `Manifesto não encontrado (404). Verifique: (1) o repo 'z-scrapper' é privado? → adicione GITHUB_TOKEN ao .env; (2) o arquivo updates/manifest.json existe no GitHub?`
+          ));
+          return;
+        }
+        if (res.statusCode !== 200) {
+          reject(new Error(`HTTP ${res.statusCode} ao baixar ${u}`));
+          return;
+        }
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+        res.on("error", reject);
+      });
+      req.on("timeout", () => { req.destroy(); reject(new Error("Timeout")); });
+      req.on("error", reject);
+    };
+
+    doGet(getRequestUrl(url));
   });
 }
 
 function httpsDownload(url: string, destPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
-    const file = fs.createWriteStream(destPath);
 
     const doGet = (u: string) => {
-      const req = https.get(u, { timeout: 30000 }, (res) => {
+      const options = { timeout: 30000, headers: getGitHubHeaders(u) };
+      const req = https.get(u, options, (res) => {
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          file.close();
           doGet(res.headers.location);
           return;
         }
         if (res.statusCode !== 200) {
-          file.close();
           reject(new Error(`HTTP ${res.statusCode} ao baixar ${u}`));
           return;
         }
+        const file = fs.createWriteStream(destPath);
         res.pipe(file);
         file.on("finish", () => { file.close(); resolve(); });
-        res.on("error", (e) => { file.close(); reject(e); });
+        file.on("error", (e) => { fs.unlink(destPath, () => {}); reject(e); });
+        res.on("error", (e) => { file.close(); fs.unlink(destPath, () => {}); reject(e); });
       });
-      req.on("timeout", () => { req.destroy(); file.close(); reject(new Error("Timeout")); });
-      req.on("error", (e) => { file.close(); reject(e); });
+      req.on("timeout", () => { req.destroy(); reject(new Error("Timeout")); });
+      req.on("error", (e) => { reject(e); });
     };
 
-    doGet(url);
+    doGet(getRequestUrl(url));
   });
 }
+
 
 function sha256File(filePath: string): string {
   const content = fs.readFileSync(filePath);
