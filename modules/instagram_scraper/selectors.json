@@ -1,0 +1,56 @@
+{
+  "_meta": {
+    "description": "Seletores DOM do Instagram — atualizável remotamente sem restart do servidor.",
+    "last_layout_change": "2026-06-23",
+    "instagram_version_tested": "v324.x",
+    "note": "Edite este arquivo e faça push para atualizar todos os clientes automaticamente."
+  },
+
+  "profile": {
+    "name_candidates": [
+      "h1",
+      "header h1",
+      "header section h1",
+      "header span[class*=\"x1lliihq\"]"
+    ],
+    "pic_meta": "meta[property=\"og:image\"]",
+    "description_meta": "meta[property='og:description']",
+    "header": "header",
+    "all_links": "a[role=\"link\"]",
+    "page_title": "title"
+  },
+
+  "posts": {
+    "grid_links": "a[href*=\"/p/\"]",
+    "all_links": "a[href*=\"/p/\"], a[href*=\"/reel/\"]",
+    "article_image": "article img",
+    "post_wait_selector": "article a[href*=\"/p/\"], article a[href*=\"/reel/\"]"
+  },
+
+  "interactions": {
+    "like_button": "svg[aria-label=\"Curtir\"], svg[aria-label=\"Like\"]",
+    "unlike_button": "svg[aria-label=\"Descurtir\"], svg[aria-label=\"Unlike\"]",
+    "liked_by_link": "a[href*=\"/liked_by/\"]",
+    "close_dialog": "div[role=\"dialog\"] button svg[aria-label=\"Close\"]",
+    "load_more_comments": "svg[aria-label=\"Carregar mais comentários\"], svg[aria-label=\"Load more comments\"]"
+  },
+
+  "dm": {
+    "search_input": "input[name=\"queryBox\"], input[placeholder*=\"esquisa\"], input[placeholder*=\"earch\"], input[type=\"text\"]",
+    "dismiss_popup_xpath": "//button[contains(., 'Agora não') or contains(., 'Not Now') or contains(., 'agora não')] | //div[@role=\"button\" and (contains(., 'Agora não') or contains(., 'Not Now'))]",
+    "next_button_xpath": "//div[@role=\"button\" and (contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'bate-papo') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'chat') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'avan') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'next'))]"
+  },
+
+  "followers": {
+    "dialog": "[role=\"dialog\"]",
+    "dialog_all": "div[role=\"dialog\"]",
+    "follower_links_in_dialog": "a[role=\"link\"]",
+    "scroll_container_fallback": "div[style*=\"overflow\"]",
+    "scroll_container_class": "[class*=\"scroll\"]"
+  },
+
+  "session": {
+    "login_url": "https://www.instagram.com/accounts/login/",
+    "profile_api_url": "https://www.instagram.com/api/v1/accounts/edit/web_form_data/"
+  }
+}

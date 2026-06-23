@@ -1,0 +1,7 @@
+{
+  "name": "google_maps_scraper",
+  "version": "1.0.0",
+  "min_core_version": "1.0.0",
+  "description": "Google Maps Lead Extractor (Serper.dev + Playwright)",
+  "updated_at": "2026-06-23"
+}

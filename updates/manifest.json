@@ -1,0 +1,39 @@
+{
+  "last_updated": "2026-06-23T22:00:00Z",
+  "modules": {
+    "instagram_scraper": {
+      "current_version": "1.0.0",
+      "min_core_version": "1.0.0",
+      "files": [
+        {
+          "path": "modules/instagram_scraper/selectors.json",
+          "url": "https://raw.githubusercontent.com/jrmacbrandt/z-scrapper/main/modules/instagram_scraper/selectors.json",
+          "checksum": "",
+          "size_bytes": 0
+        }
+      ],
+      "changelog": "Versão inicial — seletores extraídos para JSON (jun/2026)",
+      "mandatory": false,
+      "release_date": "2026-06-23"
+    },
+    "google_maps_scraper": {
+      "current_version": "1.0.0",
+      "min_core_version": "1.0.0",
+      "files": [
+        {
+          "path": "modules/google_maps_scraper/selectors.json",
+          "url": "https://raw.githubusercontent.com/jrmacbrandt/z-scrapper/main/modules/google_maps_scraper/selectors.json",
+          "checksum": "",
+          "size_bytes": 0
+        }
+      ],
+      "changelog": "Versão inicial — seletores extraídos para JSON (jun/2026)",
+      "mandatory": false,
+      "release_date": "2026-06-23"
+    }
+  },
+  "core": {
+    "latest_version": "1.0.0",
+    "update_available": false
+  }
+}

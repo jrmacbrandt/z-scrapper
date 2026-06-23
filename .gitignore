@@ -18,3 +18,7 @@ test-*.cjs
 *.png
 dist-installer/
 installer/
+
+# Updater — downloads e backups locais (não versionar)
+updater/temp/
+modules/*/backup_*/

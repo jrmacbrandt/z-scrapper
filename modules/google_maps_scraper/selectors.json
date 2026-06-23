@@ -1,0 +1,39 @@
+{
+  "_meta": {
+    "description": "Seletores DOM do Google Maps — atualizável remotamente.",
+    "last_layout_change": "2026-06-23",
+    "note": "Edite este arquivo e faça push para atualizar todos os clientes automaticamente."
+  },
+
+  "search_results": {
+    "feed": "div[role=\"feed\"]",
+    "place_links_primary": "a[href*=\"/maps/place/\"]",
+    "place_links_fallback": "[role=\"article\"] a[href]",
+    "accept_cookies": "button:has-text(\"Aceitar tudo\"), button:has-text(\"Accept all\")"
+  },
+
+  "place_detail": {
+    "phone_button": "button[data-item-id^=\"phone:\"]",
+    "website_button": "a[data-item-id=\"authority\"]",
+    "rating_container": ".F7nice",
+    "rating_stars": "[aria-label*=\"estrelas\"], [aria-label*=\"stars\"]",
+    "rating_span_hidden": "span[aria-hidden=\"true\"]",
+    "rating_count_button": "button, span[aria-label]"
+  },
+
+  "fallbacks": {
+    "all_buttons_with_aria": "button[aria-label]",
+    "all_links_with_href": "a[href]",
+    "all_spans": "span",
+    "all_interactive": "button, span, a"
+  },
+
+  "patterns": {
+    "phone_regex": "\\(?\\d{2}\\)?\\s?\\d{4,5}[-.\\s]?\\d{4}",
+    "phone_prefix": "\\+55",
+    "phone_label_strip_pt": "Telefone:\\s*",
+    "phone_label_strip_en": "Phone:\\s*",
+    "rating_decimal": "^[3-5][,\\.][0-9]$",
+    "review_count": "[\\d\\.\\,]+\\s*(?:avalia|coment|review)"
+  }
+}
