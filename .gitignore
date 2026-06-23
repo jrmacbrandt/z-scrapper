@@ -17,7 +17,9 @@ test-*.js
 test-*.cjs
 *.png
 dist-installer/
-installer/
+installer/node/
+installer/chromium/
+installer/node_modules/
 
 # Updater — downloads e backups locais (não versionar)
 updater/temp/
