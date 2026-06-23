@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import axios from "axios";
+import https from "https";
 import libphonenumber from "google-libphonenumber";
 import dotenv from "dotenv";
 import { chromium } from "playwright-extra";
@@ -23,6 +24,78 @@ dotenv.config();
 const router = Router();
 const phoneUtil = libphonenumber.PhoneNumberUtil.getInstance();
 const PhoneNumberFormat = libphonenumber.PhoneNumberFormat;
+
+// Disable TLS reject globally for scrapers
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+async function pingWebsite(url: string | null): Promise<string> {
+  if (!url) return "Sem Website";
+  
+  let targetUrl = url.trim();
+  if (!/^https?:\/\//i.test(targetUrl)) {
+    targetUrl = "http://" + targetUrl;
+  }
+
+  const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  const headers = {
+    "User-Agent": userAgent,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache"
+  };
+
+  const agent = new https.Agent({
+    rejectUnauthorized: false,
+    keepAlive: true
+  });
+
+  // Tenta HEAD primeiro (mais rápido)
+  try {
+    const res = await axios.head(targetUrl, {
+      headers,
+      timeout: 4000,
+      httpsAgent: agent,
+      validateStatus: () => true, // Não lança erro para nenhum status HTTP
+      maxRedirects: 5
+    });
+    
+    // Se respondeu com qualquer status de sucesso ou redirecionamento
+    if (res.status >= 200 && res.status < 400) {
+      return "Ativo";
+    }
+    // Se o HEAD deu erro de permissão (401, 403, 405) mas o servidor respondeu, o site provavelmente está ativo (apenas bloqueou o método HEAD)
+    if ([401, 403, 405].includes(res.status)) {
+      return await pingGetFallback(targetUrl, headers, agent);
+    }
+  } catch (e: any) {
+    return await pingGetFallback(targetUrl, headers, agent);
+  }
+
+  return "Inativo/Quebrado";
+}
+
+async function pingGetFallback(url: string, headers: any, agent: any): Promise<string> {
+  try {
+    const res = await axios.get(url, {
+      headers,
+      timeout: 5000,
+      httpsAgent: agent,
+      validateStatus: () => true, // Não lança erro para nenhum status HTTP
+      maxRedirects: 5
+    });
+
+    if (res.status >= 200 && res.status < 405) {
+      return "Ativo";
+    }
+  } catch (err: any) {
+    const errMsg = err.message || "";
+    if (errMsg.includes("CERT_") || errMsg.includes("unable to verify the first certificate") || errMsg.includes("certificate has expired")) {
+      return "Ativo";
+    }
+  }
+  return "Inativo/Quebrado";
+}
 
 // ── State de Monitoramento do Google Maps ─────────────────────────────────────
 let gmapsScraperRunning = false;
@@ -208,33 +281,8 @@ router.post("/extract-serper", async (req: Request, res: Response) => {
       }
 
       // MÓDULO 3: VALIDAÇÃO DE CONECTIVIDADE (HTTP PING ASYNC)
-      let websiteStatus = "Desconhecido";
       const websiteUrl = place.website || null;
-
-      if (websiteUrl) {
-        try {
-          const abortController = new AbortController();
-          const timeoutId = setTimeout(() => abortController.abort(), 3500);
-
-          const ping = await fetch(websiteUrl, {
-            method: "HEAD", // Ping rápido
-            signal: abortController.signal
-          });
-          
-          clearTimeout(timeoutId);
-
-          if (ping.ok || (ping.status >= 300 && ping.status < 400)) {
-            websiteStatus = "Ativo";
-          } else {
-            websiteStatus = "Inativo/Quebrado";
-          }
-        } catch (err) {
-          // Em caso de CORS, timeout, ou falha de DNS, consideramos inativo/quebrado
-          websiteStatus = "Inativo/Quebrado";
-        }
-      } else {
-        websiteStatus = "Sem Website";
-      }
+      const websiteStatus = await pingWebsite(websiteUrl);
 
       const isActuallyClaimed = place.unclaimedListing === true ? false : true;
 
@@ -568,37 +616,81 @@ router.post("/extract-local", async (req: Request, res: Response) => {
                  }
 
                  let rating = 0, ratingCount = 0;
-                 const ratingDiv = document.querySelector('div[aria-label*="estrelas"], div[aria-label*="stars"]');
-                 if (ratingDiv) {
-                   const aria = ratingDiv.getAttribute('aria-label') || "";
-                   const ratingMatch = aria.match(/([\d,\.]+)\s*(?:estrelas|stars)/);
-                   if (ratingMatch) rating = parseFloat(ratingMatch[1].replace(',', '.'));
-                   
-                   const countMatch = aria.match(/([\d\.\,]+)\s*(?:avalia|coment|review)/i);
-                   if (countMatch) ratingCount = parseInt(countMatch[1].replace(/[\.,]/g, ''));
-                   
-                   if (ratingCount === 0) {
-                     const btns = Array.from(document.querySelectorAll('button'));
-                     for (const b of btns) {
-                       const m = (b as HTMLElement).innerText.trim().match(/^\(([\d\.\,]+)\)$/);
-                       if (m) {
-                         ratingCount = parseInt(m[1].replace(/[\.,]/g, ''));
-                         break;
+
+                 // 1. Tenta buscar pelo container padrão do Google Maps (.F7nice)
+                 const f7nice = document.querySelector('.F7nice');
+                 if (f7nice) {
+                   const text = (f7nice as HTMLElement).innerText || "";
+                   // Exemplo: "4,7(1.234)" ou "4.7 (12)"
+                   const match = text.match(/([\d,\.]+)\s*\(([\d\.\,]+)\)/);
+                   if (match) {
+                     rating = parseFloat(match[1].replace(',', '.'));
+                     ratingCount = parseInt(match[2].replace(/[\.,]/g, ''));
+                   } else {
+                     // Se não bateu o regex direto, busca o texto de spans/buttons filhos
+                     const ratingSpan = f7nice.querySelector('span[aria-hidden="true"]');
+                     if (ratingSpan) {
+                       const rVal = (ratingSpan as HTMLElement).innerText.trim().replace(',', '.');
+                       rating = parseFloat(rVal) || 0;
+                     }
+                     const countBtn = f7nice.querySelector('button, span[aria-label]');
+                     if (countBtn) {
+                       const aria = countBtn.getAttribute('aria-label') || "";
+                       const countMatch = aria.match(/([\d\.\,]+)\s*(?:avalia|coment|review)/i);
+                       if (countMatch) {
+                         ratingCount = parseInt(countMatch[1].replace(/[\.,]/g, ''));
+                       } else {
+                         const textMatch = (countBtn as HTMLElement).innerText.match(/([\d\.\,]+)/);
+                         if (textMatch) ratingCount = parseInt(textMatch[1].replace(/[\.,]/g, ''));
                        }
                      }
                    }
-                   
-                   if (ratingCount === 0 && ratingDiv.parentElement) {
-                     const pt = (ratingDiv.parentElement as HTMLElement).innerText;
-                     const m = pt.match(/[\d,]+\s*\(([\d\.\,]+)\)/);
-                     if (m) ratingCount = parseInt(m[1].replace(/[\.,]/g, ''));
+                 }
+
+                 // 2. Fallback 1: Buscar por elementos com aria-label de estrelas/stars (sem restrição de tag div/span)
+                 if (rating === 0 || ratingCount === 0) {
+                   const ratingEl = document.querySelector('[aria-label*="estrelas"], [aria-label*="stars"]');
+                   if (ratingEl) {
+                     const aria = ratingEl.getAttribute('aria-label') || "";
+                     const ratingMatch = aria.match(/([\d,\.]+)\s*(?:estrelas|stars)/);
+                     if (ratingMatch && rating === 0) {
+                       rating = parseFloat(ratingMatch[1].replace(',', '.'));
+                     }
+                     
+                     // Busca elemento de review próximo no mesmo pai
+                     const parent = ratingEl.parentElement;
+                     if (parent) {
+                       const text = parent.innerText || "";
+                       const countMatch = text.match(/([\d\.\,]+)\s*(?:avalia|coment|review)/i) || text.match(/\(([\d\.\,]+)\)/);
+                       if (countMatch && ratingCount === 0) {
+                         ratingCount = parseInt(countMatch[1].replace(/[\.,]/g, ''));
+                       }
+                     }
                    }
                  }
+
+                 // 3. Fallback 2: Varredura ampla de botões e spans para o número de avaliações
+                 if (ratingCount === 0) {
+                   const elements = Array.from(document.querySelectorAll('button, span, a'));
+                   for (const el of elements) {
+                     const text = (el as HTMLElement).innerText?.trim() || "";
+                     const m = text.match(/^([\d\.\,]+)\s+(?:avalia|coment|review)/i) || text.match(/^\(([\d\.\,]+)\)$/);
+                     if (m) {
+                       const val = m[1].replace(/[\.,]/g, '').trim();
+                       if (val && (text.includes('avalia') || text.includes('review') || text.includes('coment') || text.startsWith('('))) {
+                         ratingCount = parseInt(val) || 0;
+                         if (ratingCount > 0) break;
+                       }
+                     }
+                   }
+                 }
+
+                 // 4. Fallback 3: Varredura de rating decimal (como 4,7 ou 5,0)
                  if (rating === 0) {
                    const spans = Array.from(document.querySelectorAll('span'));
                    for (const s of spans) {
                      const text = (s as HTMLElement).innerText.trim();
-                     if (/^[\d],[\d]$/.test(text)) {
+                     if (/^[3-5][,\.][0-9]$/.test(text)) {
                        rating = parseFloat(text.replace(',', '.'));
                        break;
                      }
@@ -653,17 +745,8 @@ router.post("/extract-local", async (req: Request, res: Response) => {
           } catch (e) {}
         }
 
-        let websiteStatus = "Desconhecido";
         const websiteUrl = place.website || null;
-        if (websiteUrl) {
-          try {
-            const abortController = new AbortController();
-            const timeoutId = setTimeout(() => abortController.abort(), 3500);
-            const ping = await fetch(websiteUrl, { method: "HEAD", signal: abortController.signal });
-            clearTimeout(timeoutId);
-            websiteStatus = (ping.ok || (ping.status >= 300 && ping.status < 400)) ? "Ativo" : "Inativo/Quebrado";
-          } catch (err) { websiteStatus = "Inativo/Quebrado"; }
-        } else { websiteStatus = "Sem Website"; }
+        const websiteStatus = await pingWebsite(websiteUrl);
 
         let score = 100;
         if (websiteStatus === "Inativo/Quebrado") score -= 30;

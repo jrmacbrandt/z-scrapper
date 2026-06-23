@@ -54,6 +54,7 @@ export default function GoogleMapsDashboard() {
   const [activeSearch, setActiveSearch] = useState<string | null>(null);
   const [showBuscas, setShowBuscas] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [visibleCount, setVisibleCount] = useState(25);
 
   // Scraper State
   const [keyword, setKeyword] = useState("");
@@ -90,6 +91,7 @@ export default function GoogleMapsDashboard() {
       const res = await fetch(url);
       const data = await res.json();
       setLeads(data || []);
+      setVisibleCount(25);
     } catch {}
   };
 
@@ -122,7 +124,7 @@ export default function GoogleMapsDashboard() {
 
   useEffect(() => {
     if (autoScroll) {
-      logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }, [scraperLog, autoScroll]);
 
@@ -234,7 +236,7 @@ export default function GoogleMapsDashboard() {
   };
 
   return (
-    <main className="flex-1 flex flex-col bg-slate-950 overflow-hidden font-sans relative">
+    <main className="flex-1 flex flex-col bg-slate-950 overflow-y-auto custom-scrollbar font-sans relative">
       <div className="absolute top-0 left-0 w-full h-[300px] bg-gradient-to-b from-blue-900/10 to-transparent pointer-events-none" />
 
       {/* ── Buscas Salvas Modal ── */}
@@ -474,7 +476,7 @@ export default function GoogleMapsDashboard() {
       )}
 
       {/* Table Section */}
-      <section className="flex-1 min-h-0 mx-8 mt-6 mb-8 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl z-10 relative">
+      <section className="mx-8 mt-6 mb-8 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col shadow-xl z-10 relative">
         <div className="border-b border-slate-800 px-6 py-4 flex justify-between items-center bg-slate-900 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-slate-950 rounded-lg border border-slate-800">
@@ -504,7 +506,7 @@ export default function GoogleMapsDashboard() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto custom-scrollbar relative">
+        <div className="relative">
           {leads.length === 0 ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8">
               <MapPin className="w-12 h-12 text-slate-800 mb-3" />
@@ -514,7 +516,7 @@ export default function GoogleMapsDashboard() {
             </div>
           ) : (
             <div className="p-6 space-y-4">
-              {leads.map((lead, idx) => {
+              {leads.slice(0, visibleCount).map((lead, idx) => {
                 const score = lead.opportunity_score;
                 const isHigh = score >= 80;
                 const isMid = score >= 50 && score < 80;
@@ -560,7 +562,7 @@ export default function GoogleMapsDashboard() {
                           <span className="text-slate-500">({lead.reviews_count} avaliações)</span>
                         </span>
 
-                        {lead.phone_e164 ? (
+                        {lead.phone_e164 && lead.phone_type === "MOBILE" ? (
                           <a
                             href={getWhatsAppUrl(lead.phone_e164)}
                             target="_blank"
@@ -571,14 +573,12 @@ export default function GoogleMapsDashboard() {
                           >
                             <MessageCircle className="w-3.5 h-3.5 text-green-500" />
                             {lead.phone_e164}
-                            {lead.phone_type === "MOBILE" && (
-                              <span className="text-[8px] bg-green-500/10 text-green-400 px-1 rounded uppercase font-bold">Cel</span>
-                            )}
+                            <span className="text-[8px] bg-green-500/10 text-green-400 px-1 rounded uppercase font-bold">Cel</span>
                           </a>
                         ) : (
-                          <span className="flex items-center gap-1.5 text-slate-600">
-                            <Phone className="w-3.5 h-3.5" />
-                            {lead.phone_raw || "Sem Telefone"}
+                          <span className="flex items-center gap-1.5 text-slate-500">
+                            <Phone className="w-3.5 h-3.5 opacity-60" />
+                            {lead.phone_e164 || lead.phone_raw || "Sem Telefone"}
                           </span>
                         )}
 
@@ -612,6 +612,17 @@ export default function GoogleMapsDashboard() {
                   </div>
                 );
               })}
+              {leads.length > visibleCount && (
+                <div className="px-6 py-3 bg-slate-950/30 flex justify-center border-t border-slate-800/50 mt-4 rounded-xl">
+                  <button 
+                    onClick={() => setVisibleCount(prev => prev + 25)}
+                    className="text-[10px] font-bold uppercase tracking-widest text-yellow-400 hover:text-white bg-yellow-500/10 hover:bg-yellow-500/30 border border-yellow-500/20 px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+                  >
+                    <RefreshCcw className="w-3 h-3" />
+                    Carregar mais (+25 de {leads.length - visibleCount} restantes)
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

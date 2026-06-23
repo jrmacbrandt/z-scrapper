@@ -66,6 +66,7 @@ export function initDB() {
             is_private INTEGER DEFAULT 0,
             perfil_pai TEXT,
             dm_enviado INTEGER DEFAULT 0,
+            score INTEGER DEFAULT 10,
             criado_em TEXT DEFAULT CURRENT_TIMESTAMP,
             atualizado_em TEXT DEFAULT CURRENT_TIMESTAMP
         );
@@ -76,6 +77,20 @@ export function initDB() {
             alvo TEXT NOT NULL,
             total_capturado INTEGER DEFAULT 0,
             criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS ig_scraping_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            target_username TEXT UNIQUE NOT NULL,
+            next_max_id TEXT NOT NULL,
+            total_extracted INTEGER DEFAULT 0,
+            atualizado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS ig_posts_processados (
+            post_url TEXT PRIMARY KEY,
+            target_username TEXT,
+            processed_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS ig_leads (

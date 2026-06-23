@@ -2,11 +2,10 @@
 // App.tsx — Shell principal: roteamento entre módulos + sidebar accordion
 // Não contém lógica de negócio — apenas navega entre módulos isolados.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Database,
-  History,
   ChevronRight,
   Instagram,
   Search,
@@ -14,13 +13,12 @@ import {
   MapPin,
 } from "lucide-react";
 
-import ZapImoveisDashboard, { ZapStatus } from "./modules/zapimoveis/ZapImoveisDashboard";
 import InstagramDashboard from "./modules/instagram/InstagramDashboard";
 import LeadsDashboard from "./modules/instagram/LeadsDashboard";
 import GoogleMapsDashboard from "./modules/googlemaps/GoogleMapsDashboard";
 
 // null = nenhum módulo ativo (tela inicial/splash)
-type Module = "zapimoveis" | "instagram" | "googlemaps" | null;
+type Module = "instagram" | "googlemaps" | null;
 
 // ── WelcomeScreen inline (com vídeo embutido) ─────────────────────────────────
 function WelcomeScreen() {
@@ -80,20 +78,8 @@ function WelcomeScreen() {
 export default function App() {
   // Nenhum módulo ativo ao iniciar — menus fechados
   const [activeModule, setActiveModule] = useState<Module>(null);
-  const [zapExpanded, setZapExpanded] = useState(false);
   const [instaExpanded, setInstaExpanded] = useState(false);
   const [mapsExpanded, setMapsExpanded] = useState(false);
-
-  // Estado de status do ZapImóveis exposto ao sidebar via callback
-  const [zapStatus, setZapStatus] = useState<ZapStatus>({
-    running: false,
-    isLive: true,
-    buscasCount: 0,
-    showLog: false,
-  });
-
-  // Pedido de seção para o módulo ZapImóveis (log / buscas / null)
-  const [zapSectionRequest, setZapSectionRequest] = useState<string | null>(null);
 
   // Pedido de seção para o módulo Instagram
   const [igSectionRequest, setIgSectionRequest] = useState<string>("profile");
@@ -101,35 +87,11 @@ export default function App() {
   // Pedido de seção para o módulo Google Maps
   const [mapsSectionRequest, setMapsSectionRequest] = useState<string | null>(null);
 
-  const handleZapStatusChange = useCallback((status: ZapStatus) => {
-    setZapStatus(status);
-  }, []);
-
-  const openZapSection = (section: string | null) => {
-    setActiveModule("zapimoveis");
-    setZapExpanded(true);
-    setInstaExpanded(false);
-    setMapsExpanded(false);
-    setZapSectionRequest(null);
-    setTimeout(() => setZapSectionRequest(section), 0);
-  };
-
-  const toggleZap = () => {
-    const next = !zapExpanded;
-    setZapExpanded(next);
-    if (next) {
-      setActiveModule("zapimoveis");
-      setInstaExpanded(false);
-      setMapsExpanded(false);
-    }
-  };
-
   const toggleInstagram = () => {
     const next = !instaExpanded;
     setInstaExpanded(next);
     if (next) {
       setActiveModule("instagram");
-      setZapExpanded(false);
       setMapsExpanded(false);
     }
   };
@@ -139,7 +101,6 @@ export default function App() {
     setMapsExpanded(next);
     if (next) {
       setActiveModule("googlemaps");
-      setZapExpanded(false);
       setInstaExpanded(false);
     }
   };
@@ -147,7 +108,6 @@ export default function App() {
   const openIgSection = (section: string) => {
     setActiveModule("instagram");
     setInstaExpanded(true);
-    setZapExpanded(false);
     setMapsExpanded(false);
     setIgSectionRequest(section);
   };
@@ -155,7 +115,6 @@ export default function App() {
   const openMapsSection = (section: string | null) => {
     setActiveModule("googlemaps");
     setMapsExpanded(true);
-    setZapExpanded(false);
     setInstaExpanded(false);
     setMapsSectionRequest(null);
     setTimeout(() => setMapsSectionRequest(section), 0);
@@ -169,7 +128,6 @@ export default function App() {
         <button 
           onClick={() => {
             setActiveModule(null);
-            setZapExpanded(false);
             setInstaExpanded(false);
             setMapsExpanded(false);
           }}
@@ -188,71 +146,6 @@ export default function App() {
 
         {/* Nav acordeão */}
         <nav className="flex-1 overflow-y-auto py-3 space-y-1">
-
-          {/* ── Dashboard ZapImóveis ── */}
-          <div>
-            <button
-              onClick={toggleZap}
-              className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-bold transition-all ${
-                activeModule === "zapimoveis"
-                  ? "text-sky-400"
-                  : "text-slate-300 hover:text-white"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-6 h-6 rounded flex items-center justify-center shadow-sm overflow-hidden ${
-                  activeModule === "zapimoveis"
-                    ? "shadow-sky-500/30 border border-sky-500/50"
-                    : "border border-transparent"
-                }`}>
-                  <img src="/download.png" className="w-full h-full object-cover scale-[1.35] bg-transparent" alt="Zap" />
-                </div>
-                <span className="uppercase tracking-widest text-[11px]">Dashboard ZapImóveis</span>
-              </div>
-              <motion.div animate={{ rotate: zapExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
-                <ChevronRight className="w-4 h-4" />
-              </motion.div>
-            </button>
-
-            <AnimatePresence initial={false}>
-              {zapExpanded && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.22, ease: "easeInOut" }}
-                  className="overflow-hidden"
-                >
-                  <div className="pl-4 pb-2 space-y-0.5">
-                    <button
-                      onClick={() => openZapSection(null)}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                        activeModule === "zapimoveis"
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-400 hover:bg-slate-900 hover:text-white"
-                      }`}
-                    >
-                      <Database className="w-4 h-4 text-sky-400" />
-                      Dashboard
-                    </button>
-
-                    {zapStatus.buscasCount > 0 && (
-                      <button
-                        onClick={() => openZapSection("buscas")}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white rounded-lg text-sm transition-all group"
-                      >
-                        <History className="w-4 h-4 group-hover:text-purple-400 transition-colors" />
-                        Buscas Salvas
-                        <span className="ml-auto text-[9px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded-full font-bold">
-                          {zapStatus.buscasCount}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
 
           {/* ── Dashboard Instagram ── */}
           <div>
@@ -386,14 +279,6 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* ZapImóveis — sempre montado para preservar estado, visibilidade por CSS */}
-        <div className={`absolute inset-0 flex overflow-hidden ${activeModule === "zapimoveis" ? "" : "hidden"}`}>
-          <ZapImoveisDashboard
-            sectionRequest={zapSectionRequest}
-            onStatusChange={handleZapStatusChange}
-          />
-        </div>
 
         {/* Instagram */}
         <div className={`absolute inset-0 flex overflow-hidden ${activeModule === "instagram" ? "" : "hidden"}`}>

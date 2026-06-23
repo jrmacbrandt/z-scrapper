@@ -20,11 +20,6 @@ const USER_AGENTS = [
   // Edge Windows
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0",
-  // Firefox Windows
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
-  // Firefox Mac
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:130.0) Gecko/20100101 Firefox/130.0",
 ];
 
 // ── Viewports Comuns com Variação ───────────────────────────────────────────────
@@ -95,7 +90,6 @@ export function getRealisticHeaders(userAgent: string): Record<string, string> {
 
   const headers: Record<string, string> = {
     "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
   };
 
   if (chromeVersion && !isFirefox) {
@@ -106,11 +100,6 @@ export function getRealisticHeaders(userAgent: string): Record<string, string> {
     }
     headers["Sec-Ch-Ua-Mobile"] = "?0";
     headers["Sec-Ch-Ua-Platform"] = userAgent.includes("Macintosh") ? '"macOS"' : '"Windows"';
-    headers["Sec-Fetch-Dest"] = "document";
-    headers["Sec-Fetch-Mode"] = "navigate";
-    headers["Sec-Fetch-Site"] = "none";
-    headers["Sec-Fetch-User"] = "?1";
-    headers["Upgrade-Insecure-Requests"] = "1";
   }
 
   return headers;
@@ -208,6 +197,8 @@ export function getStealthInitScript(): () => void {
     Object.defineProperty(navigator, "languages", { get: () => ["pt-BR", "pt", "en-US", "en"] });
 
     // ═══ 5. chrome object ═══
+    // Omitido: puppeteer-extra-plugin-stealth já lida com isso de forma mais segura via proxies
+    /*
     const w = window as any;
     if (!w.chrome) {
       w.chrome = {};
@@ -222,27 +213,7 @@ export function getStealthInitScript(): () => void {
       connect: function() {},
       sendMessage: function() {},
     };
-    w.chrome.loadTimes = w.chrome.loadTimes || function() {
-      return {
-        commitLoadTime: Date.now() / 1000,
-        connectionInfo: "h2",
-        finishDocumentLoadTime: Date.now() / 1000,
-        finishLoadTime: Date.now() / 1000,
-        firstPaintAfterLoadTime: 0,
-        firstPaintTime: Date.now() / 1000,
-        navigationType: "Other",
-        npnNegotiatedProtocol: "h2",
-        requestTime: Date.now() / 1000 - 0.3,
-        startLoadTime: Date.now() / 1000 - 0.5,
-        wasAlternateProtocolAvailable: false,
-        wasFetchedViaSpdy: true,
-        wasNpnNegotiated: true,
-      };
-    };
-    w.chrome.csi = w.chrome.csi || function() {
-      return { onloadT: Date.now(), pageT: Date.now() / 1000, startE: Date.now(), tran: 15 };
-    };
-    w.chrome.app = w.chrome.app || { isInstalled: false, InstallState: { INSTALLED: "installed", NOT_INSTALLED: "not_installed" }, RunningState: { CANNOT_RUN: "cannot_run", READY_TO_RUN: "ready_to_run", RUNNING: "running" } };
+    */
 
     // ═══ 6. Permissions API ═══
     const origQuery = (navigator as any).permissions?.query?.bind((navigator as any).permissions);
@@ -314,23 +285,7 @@ export function getStealthInitScript(): () => void {
     Object.defineProperty(window, "outerHeight", { get: () => window.innerHeight + 85 }); // 85px = chrome toolbar
 
     // ═══ 13. Prevenir detecção via Function.toString ═══
-    const nativeToString = Function.prototype.toString;
-    const customFunctions = new Set<Function>();
-
-    const patchToString = (fn: Function, nativeName: string) => {
-      customFunctions.add(fn);
-      const originalToString = fn.toString;
-      (fn as any).toString = function() {
-        if (customFunctions.has(this)) {
-          return `function ${nativeName}() { [native code] }`;
-        }
-        return nativeToString.call(this);
-      };
-    };
-
-    // Patch the overridden functions to look native
-    patchToString(WebGLRenderingContext.prototype.getParameter, "getParameter");
-    patchToString(HTMLCanvasElement.prototype.toDataURL, "toDataURL");
+    // Omitido: Causa problemas de compatibilidade e o stealth plugin já faz isso via proxies.
 
     // ═══ 14. Notification.permission ═══
     try {
@@ -569,37 +524,123 @@ export function getStealthContextOptions(overrides: Record<string, any> = {}): R
 // SIMULAÇÃO DE COMPORTAMENTO HUMANO
 // ══════════════════════════════════════════════════════════════════════════════
 
+// Rastreamento de posição real do cursor por página
+const pageMousePos = new WeakMap<any, { x: number; y: number }>();
+
 /**
- * Simula um movimento de mouse com curva de Bezier (mais realista que line reta)
+ * Simula um movimento de mouse com curva de Bezier + rastreamento real de posição.
+ * Garante que o cursor sempre começa de onde estava antes (não de posição aleatória).
  */
-export async function humanMouseMove(page: any, targetX: number, targetY: number, steps = 10): Promise<void> {
-  const currentPos = { x: Math.random() * 500 + 100, y: Math.random() * 300 + 100 };
+export async function humanMouseMove(page: any, targetX: number, targetY: number, steps = 12): Promise<void> {
+  // Posição atual real do cursor (ou aleatória se for o primeiro movimento)
+  const current = pageMousePos.get(page) || {
+    x: 300 + Math.random() * 400,
+    y: 200 + Math.random() * 250,
+  };
 
   // Ponto de controle aleatório para curva de Bezier quadrática
-  const cpX = (currentPos.x + targetX) / 2 + (Math.random() - 0.5) * 200;
-  const cpY = (currentPos.y + targetY) / 2 + (Math.random() - 0.5) * 200;
+  const cpX = (current.x + targetX) / 2 + (Math.random() - 0.5) * 220;
+  const cpY = (current.y + targetY) / 2 + (Math.random() - 0.5) * 220;
 
+  // Velocidade variável (humanos aceleram no meio e desaceleram no fim)
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    // Bezier quadrática: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
-    const x = Math.pow(1 - t, 2) * currentPos.x + 2 * (1 - t) * t * cpX + Math.pow(t, 2) * targetX;
-    const y = Math.pow(1 - t, 2) * currentPos.y + 2 * (1 - t) * t * cpY + Math.pow(t, 2) * targetY;
+    const x = Math.pow(1 - t, 2) * current.x + 2 * (1 - t) * t * cpX + Math.pow(t, 2) * targetX;
+    const y = Math.pow(1 - t, 2) * current.y + 2 * (1 - t) * t * cpY + Math.pow(t, 2) * targetY;
 
     await page.mouse.move(x, y);
-    await new Promise(resolve => setTimeout(resolve, 10 + Math.random() * 30));
+
+    // Velocidade: mais lento no início e no fim (ease-in-out)
+    const speedFactor = Math.sin(Math.PI * t); // 0 → 1 → 0
+    const stepDelay = Math.max(5, 30 - speedFactor * 20 + Math.random() * 15);
+    await new Promise(resolve => setTimeout(resolve, stepDelay));
+  }
+
+  // Micro-tremor ao chegar no destino (humanos não param perfeitamente)
+  if (Math.random() < 0.4) {
+    await page.mouse.move(
+      targetX + (Math.random() - 0.5) * 4,
+      targetY + (Math.random() - 0.5) * 4
+    );
+    await new Promise(resolve => setTimeout(resolve, 80 + Math.random() * 120));
+    await page.mouse.move(targetX, targetY);
+  }
+
+  // Atualiza posição real do cursor
+  pageMousePos.set(page, { x: targetX, y: targetY });
+}
+
+/**
+ * Scroll humanizado — quantidade variável, velocidade aleatória, com ocasional contra-scroll.
+ */
+export async function humanScroll(page: any, direction: "down" | "up" = "down"): Promise<void> {
+  const numScrolls = Math.floor(Math.random() * 3) + 1; // 1 a 3 scrolls em sequência
+  const sign = direction === "down" ? 1 : -1;
+
+  for (let s = 0; s < numScrolls; s++) {
+    const amount = 180 + Math.floor(Math.random() * 350); // 180–530px por scroll
+    await page.evaluate((scrollAmount: number) => {
+      window.scrollBy({ top: scrollAmount, behavior: "smooth" });
+    }, amount * sign);
+    await humanDelay(400, 1200);
+
+    // Chance de 25%: mini contra-scroll (humano volta um pouco quando lê)
+    if (Math.random() < 0.25) {
+      const backScroll = 50 + Math.floor(Math.random() * 80);
+      await page.evaluate((scrollAmount: number) => {
+        window.scrollBy({ top: scrollAmount, behavior: "smooth" });
+      }, -backScroll * sign);
+      await humanDelay(300, 700);
+    }
   }
 }
 
 /**
- * Scroll humanizado (quantidade variável, velocidade aleatória)
+ * Digitação humanizada com ritmo variável, aceleração de burst, pausas inter-palavra
+ * e chance de erro de digitação + correção (backspace).
  */
-export async function humanScroll(page: any, direction: "down" | "up" = "down"): Promise<void> {
-  const amount = 200 + Math.floor(Math.random() * 400); // 200-600px
-  const sign = direction === "down" ? 1 : -1;
+export async function humanType(page: any, text: string): Promise<void> {
+  const words = text.split(' ');
 
-  await page.evaluate((scrollAmount: number) => {
-    window.scrollBy({ top: scrollAmount, behavior: "smooth" });
-  }, amount * sign);
+  for (let wi = 0; wi < words.length; wi++) {
+    const word = words[wi];
 
-  await humanDelay(500, 1500);
+    for (let ci = 0; ci < word.length; ci++) {
+      const char = word[ci];
+
+      // Chance de erro de digitação (1.5% por caractere)
+      if (Math.random() < 0.015 && char.match(/[a-zA-Z]/)) {
+        const wrongChar = String.fromCharCode(char.charCodeAt(0) + (Math.random() < 0.5 ? 1 : -1));
+        await page.keyboard.type(wrongChar);
+        await humanDelay(80, 250); // hesitação ao perceber o erro
+        await page.keyboard.press('Backspace');
+        await humanDelay(60, 180);
+      }
+
+      await page.keyboard.type(char);
+
+      // Delay por caractere com distribuição gaussiana (30–120ms base)
+      const u1 = Math.random();
+      const u2 = Math.random();
+      const gaussian = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      let keyDelay = 75 + gaussian * 30; // média 75ms, std 30ms
+      keyDelay = Math.max(25, Math.min(200, keyDelay));
+
+      // Burst: chance de 15% de digitar o próximo char mais rápido (dedo ancora)
+      if (Math.random() < 0.15) keyDelay *= 0.4;
+
+      await new Promise(resolve => setTimeout(resolve, keyDelay));
+    }
+
+    // Espaço entre palavras (+ pausa inter-palavra)
+    if (wi < words.length - 1) {
+      await page.keyboard.type(' ');
+      // Pausa inter-palavra: 60% chance de pausa extra (pensando)
+      if (Math.random() < 0.6) {
+        await humanDelay(80, 350);
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 30 + Math.random() * 60));
+      }
+    }
+  }
 }

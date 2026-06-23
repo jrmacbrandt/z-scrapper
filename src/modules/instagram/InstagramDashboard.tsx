@@ -21,7 +21,9 @@ import {
   Clock,
   Trash2,
   ChevronRight,
-  Check
+  Check,
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 
 interface IgPerfil {
@@ -38,7 +40,8 @@ interface IgPerfil {
   is_business: boolean;
   criado_em: string;
   perfil_pai?: string | null;
-  dm_enviado?: boolean;
+  dm_enviado?: number;
+  score?: number;
 }
 
 export default function InstagramDashboard({ sectionRequest = "profile" }: { sectionRequest?: string }) {
@@ -46,6 +49,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
   const [hasSession, setHasSession] = useState(false);
   const [sessionCookie, setSessionCookie] = useState("");
   const [sessionUsername, setSessionUsername] = useState("");
+  const [sessionProfilePic, setSessionProfilePic] = useState("");
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [savingSession, setSavingSession] = useState(false);
 
@@ -65,11 +69,52 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
   const [showDmPanel, setShowDmPanel] = useState(false);
   const [messageTemplate, setMessageTemplate] = useState("Olá {nome}, tudo bem?");
   const [sendingDMs, setSendingDMs] = useState(false);
+  const [likePostsBeforeDm, setLikePostsBeforeDm] = useState(false);
 
   // Search Filter
-  const [activeSearch, setActiveSearch] = useState<string | null>(null);
+  const [activeSearch, setActiveSearch] = useState<string | null>(() => {
+    return localStorage.getItem("ig_active_search") || null;
+  });
+
+  useEffect(() => {
+    if (activeSearch) {
+      localStorage.setItem("ig_active_search", activeSearch);
+    } else {
+      localStorage.removeItem("ig_active_search");
+    }
+  }, [activeSearch]);
   const [showBuscas, setShowBuscas] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (key: string) => {
+    setSortConfig(current => {
+      if (current?.key === key) {
+        if (current.direction === 'asc') return { key, direction: 'desc' };
+        return null;
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const applySort = (arr: IgPerfil[]) => {
+    if (!sortConfig) return arr;
+    return [...arr].sort((a, b) => {
+      let aVal: any = a[sortConfig.key as keyof IgPerfil] || "";
+      let bVal: any = b[sortConfig.key as keyof IgPerfil] || "";
+      
+      if (sortConfig.key === 'acao') {
+        aVal = (a.email_extraido ? 1 : 0) + (a.telefone_extraido ? 1 : 0) + (a.link_bio ? 1 : 0);
+        bVal = (b.email_extraido ? 1 : 0) + (b.telefone_extraido ? 1 : 0) + (b.link_bio ? 1 : 0);
+      }
+      
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
   const [visibleFollowersMap, setVisibleFollowersMap] = useState<Record<string, number>>({});
   
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -86,6 +131,10 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
       const res = await fetch("/api/ig/session");
       const data = await res.json();
       setHasSession(data.hasSession);
+      if (data.session) {
+        setSessionUsername(data.session.username);
+        setSessionProfilePic(data.session.profile_pic_url || "");
+      }
     } catch {}
   };
 
@@ -132,7 +181,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
 
   useEffect(() => {
     if (autoScroll) {
-      logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }, [scraperLog, autoScroll]);
 
@@ -142,7 +191,6 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
     setAutoScroll(isAtBottom);
   };
 
-  // ── Actions ────────────────────────────────────────────────────────────────
   const interactiveLogin = async () => {
     setSavingSession(true);
     setStatusMsg("🚀 Abrindo navegador para Login...");
@@ -155,6 +203,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
       const data = await res.json();
       if (res.ok) {
         setHasSession(true);
+        await checkSession();
         alert("Sessão capturada com sucesso!");
         setStatusMsg(null);
       } else {
@@ -184,14 +233,59 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
     } catch {}
   };
 
-  const startScrape = async () => {
-    if (!targetUser.trim()) return;
-    if (!hasSession) {
+  const markDmEnviado = async (username: string) => {
+    try {
+      await fetch("/api/ig/marcar-dm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usernames: [username] })
+      });
+      setPerfis(prev => prev.map(p => p.username === username ? { ...p, dm_enviado: (p.dm_enviado || 0) + 1 } : p));
+    } catch {}
+  };
+
+  const handleStartSearch = async (username: string, fromModal: boolean = false) => {
+    if (!username.trim()) return;
+    if (!hasSession && !fromModal) {
       setShowSessionModal(true);
       return;
     }
+    const cleanUser = username.replace("@", "").trim();
     
-    const cleanUser = targetUser.replace("@", "").trim();
+    try {
+      const res = await fetch(`/api/ig/scrape-state/${cleanUser}`);
+      const data = await res.json();
+      
+      if (data.hasState && data.maxId) {
+        if (window.confirm(`Você já tem uma extração pendente para @${cleanUser}.\nDeseja ATUALIZAR a lista com a busca inteligente (coletando mais leads e atualizando pontuações de engajamento)?\n\n[OK] Sim, continuar busca\n[Cancelar] Não, apenas abrir a lista atual`)) {
+          startScrape(cleanUser, true);
+        } else {
+          setActiveSearch(cleanUser);
+          setShowBuscas(false);
+        }
+      } else {
+        if (fromModal) {
+          if (window.confirm(`Deseja ATUALIZAR a lista de @${cleanUser} com a busca inteligente (coletando mais leads e atualizando pontuações)?\n\n[OK] Sim, buscar novos contatos\n[Cancelar] Não, apenas abrir a lista atual`)) {
+            startScrape(cleanUser, true);
+          } else {
+            setActiveSearch(cleanUser);
+            setShowBuscas(false);
+          }
+        } else {
+          startScrape(cleanUser, false);
+        }
+      }
+    } catch {
+      if (fromModal) {
+        setActiveSearch(cleanUser);
+        setShowBuscas(false);
+      } else {
+        startScrape(cleanUser, false);
+      }
+    }
+  };
+
+  const startScrape = async (cleanUser: string, resume: boolean = false) => {
     setActiveSearch(cleanUser);
     
     setLoading(true);
@@ -203,7 +297,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
       const res = await fetch("/api/ig/scrape-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetUsername: cleanUser }),
+        body: JSON.stringify({ targetUsername: cleanUser, resume }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -267,7 +361,8 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           targets: selectedFollowers,
-          template: messageTemplate 
+          template: messageTemplate,
+          likePosts: likePostsBeforeDm
         }),
       });
       const data = await res.json();
@@ -322,7 +417,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
   };
 
   return (
-    <main className="flex-1 flex flex-col bg-slate-950 overflow-hidden font-sans relative">
+    <main className="flex-1 flex flex-col bg-slate-950 overflow-y-auto custom-scrollbar font-sans relative">
       
       {/* ── Buscas Salvas Modal ── */}
       <AnimatePresence>
@@ -373,8 +468,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
                       transition={{ delay: i * 0.04 }}
                       onClick={() => {
                         if (!isConfirmingDelete) {
-                          setActiveSearch(busca.username);
-                          setShowBuscas(false);
+                          handleStartSearch(busca.username, true);
                         }
                       }}
                       className={`w-full flex items-center justify-between gap-2 px-6 py-4 transition-all text-left group ${
@@ -468,9 +562,13 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
           {/* Status Connection Widget */}
           {hasSession ? (
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-sm">
-              <CheckCircle2 className="w-4 h-4" />
+              {sessionProfilePic ? (
+                <img src={sessionProfilePic} alt="Profile" className="w-8 h-8 rounded-full border border-emerald-500/50 object-cover" />
+              ) : (
+                <CheckCircle2 className="w-6 h-6" />
+              )}
               <div className="text-right">
-                <p className="text-[9px] uppercase font-black tracking-widest opacity-80">Sessão Scraper</p>
+                <p className="text-[9px] uppercase font-black tracking-widest opacity-80">{sessionUsername ? `@${sessionUsername}` : "Sessão Scraper"}</p>
                 <p className="text-sm font-bold">CONECTADA</p>
               </div>
               <div className="w-px h-6 bg-emerald-500/20 mx-1" />
@@ -504,7 +602,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
                 type="text"
                 value={targetUser}
                 onChange={e => setTargetUser(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && !scraperRunning && startScrape()}
+                onKeyDown={e => e.key === "Enter" && !scraperRunning && handleStartSearch(targetUser)}
                 disabled={scraperRunning}
                 placeholder="Nome de usuário do perfil (Ex: neymarjr, casimiro)"
                 className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl pl-12 pr-4 py-3.5 focus:ring-2 focus:ring-pink-500/50 outline-none transition-all placeholder:text-slate-600 font-medium"
@@ -519,7 +617,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
               <X className="w-4 h-4" /> Parar Extração
             </button>
             <button
-              onClick={startScrape}
+              onClick={() => handleStartSearch(targetUser)}
               disabled={loading || scraperRunning}
               className="px-8 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 text-white font-black rounded-xl transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50 uppercase text-xs tracking-widest shadow-lg shadow-pink-500/20"
             >
@@ -577,7 +675,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
       </AnimatePresence>
 
       {/* Table Section */}
-      <section className="flex-1 min-h-0 mx-8 mt-6 mb-8 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl">
+      <section className="mx-8 mt-6 mb-8 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col shadow-xl">
         <div className="border-b border-slate-800 px-6 py-4 flex justify-between items-center bg-slate-900 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-slate-950 rounded-lg border border-slate-800"><Database className="w-4 h-4 text-pink-500" /></div>
@@ -593,18 +691,37 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+        <div className="relative">
           
 
 
           <div className="min-w-[1000px]">
             {/* Header */}
-            <div className="grid grid-cols-[3fr_3fr_2fr_3fr_1.5fr] text-[10px] uppercase font-black tracking-widest text-slate-500 border-b border-slate-800 sticky top-0 bg-slate-900/95 backdrop-blur-md z-10 px-6 py-3 items-center">
-              <div>Username</div>
-              <div className="text-center">Bio</div>
-              <div className="text-center">Métricas</div>
-              <div className="text-center">Ação Externa</div>
-              <div className="text-center">Direct</div>
+            <div className="grid grid-cols-[3fr_3fr_2fr_1.5fr_3fr_1.5fr] text-[10px] uppercase font-black tracking-widest text-slate-500 border-b border-slate-800 sticky top-0 bg-slate-900/95 backdrop-blur-md z-10 px-6 py-3 items-center">
+              <div className="flex items-center gap-1 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('username')}>
+                Username
+                {sortConfig?.key === 'username' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </div>
+              <div className="flex items-center justify-center gap-1 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('bio')}>
+                Bio
+                {sortConfig?.key === 'bio' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </div>
+              <div className="flex items-center justify-center gap-1 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('seguidores')}>
+                Métricas
+                {sortConfig?.key === 'seguidores' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </div>
+              <div className="flex items-center justify-center gap-1 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('score')}>
+                Qualificação
+                {sortConfig?.key === 'score' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </div>
+              <div className="flex items-center justify-center gap-1 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('acao')}>
+                Ação Externa
+                {sortConfig?.key === 'acao' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </div>
+              <div className="flex items-center justify-center gap-1 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('dm_enviado')}>
+                Direct
+                {sortConfig?.key === 'dm_enviado' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </div>
             </div>
 
             {/* Body */}
@@ -621,9 +738,11 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
               ) : (
                 (() => {
                   // Agrupa: perfis principais (sem perfil_pai) e seus seguidores
-                  const mainProfiles = activeSearch === "*" 
+                  let mainProfiles = activeSearch === "*" 
                     ? perfis.filter(p => !p.perfil_pai) 
                     : perfis.filter(p => !p.perfil_pai && p.username === activeSearch);
+                  
+                  mainProfiles = applySort(mainProfiles);
                   const followerMap = new Map<string, IgPerfil[]>();
                   perfis.filter(p => p.perfil_pai).forEach(p => {
                     const list = followerMap.get(p.perfil_pai!) || [];
@@ -634,12 +753,12 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
                   const renderRow = (p: IgPerfil, isFollower: boolean = false) => {
                     const isSelected = selectedFollowers.includes(p.username);
 
-                    const bgClass = p.dm_enviado 
+                    const bgClass = (p.dm_enviado && p.dm_enviado > 0)
                       ? 'bg-emerald-900/20 border-l-2 border-emerald-500/50' 
                       : (isFollower ? 'bg-slate-950/30' : '');
 
                     return (
-                      <div key={p.id} className={`grid grid-cols-[3fr_3fr_2fr_3fr_1.5fr] items-center px-6 ${isFollower ? 'py-1.5' : 'py-4'} hover:bg-slate-800/30 transition-colors ${bgClass}`}>
+                      <div key={p.id} className={`grid grid-cols-[3fr_3fr_2fr_1.5fr_3fr_1.5fr] items-center px-6 ${isFollower ? 'py-1.5' : 'py-4'} hover:bg-slate-800/30 transition-colors ${bgClass}`}>
                         
                         <div className="flex items-center gap-2">
                           {isFollower ? (
@@ -658,7 +777,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
                           <div className="flex flex-col">
                             <a href={`https://instagram.com/${p.username}`} target="_blank" rel="noreferrer" className={`text-sm font-bold hover:text-pink-400 hover:underline inline-flex items-center gap-1 ${isFollower ? 'text-slate-300' : 'text-white'}`}>
                               @{p.username}
-                              {p.is_business === 1 && <span className="text-[8px] bg-blue-500/20 text-blue-400 px-1 py-0.5 rounded uppercase">Biz</span>}
+                              {p.is_business ? <span className="text-[8px] bg-blue-500/20 text-blue-400 px-1 py-0.5 rounded uppercase">Biz</span> : null}
                             </a>
                             <span className="text-xs text-slate-400 mt-0.5 truncate pr-4">{p.nome_completo || 'Sem nome'}</span>
                           </div>
@@ -682,6 +801,18 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
                                 {p.posts.toLocaleString()} posts
                               </span>
                             </>
+                          )}
+                        </div>
+
+                        {/* Qualificação */}
+                        <div className="flex flex-col items-center justify-center text-center">
+                          {isFollower ? (
+                            <div className={`px-2 py-1 rounded text-[10px] font-bold border ${p.score && p.score >= 50 ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : p.score && p.score >= 30 ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-slate-800/50 text-slate-400 border-slate-700'}`}>
+                              {p.score && p.score >= 80 ? '🔥 ' : p.score && p.score >= 50 ? '⚡ ' : '🧊 '}
+                              {p.score || 10}/100
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-600 font-bold">-</span>
                           )}
                         </div>
 
@@ -725,15 +856,22 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
                                 href={`https://ig.me/m/${p.username}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-[10px] font-bold uppercase hover:bg-emerald-500 hover:text-white transition-all active:scale-95"
+                                onClick={() => markDmEnviado(p.username)}
+                                className="relative inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold uppercase hover:bg-emerald-500 hover:text-white transition-all active:scale-95"
+                                title={`${p.dm_enviado} mensagem(ns) enviada(s). Clique para enviar mais.`}
                               >
-                                <Check className="w-3.5 h-3.5" /> Enviado
+                                <Check className="w-3.5 h-3.5" />
+                                Enviado
+                                <span className="absolute -top-2 -right-2 min-w-[16px] h-4 bg-emerald-500 text-slate-950 text-[9px] font-black rounded-full flex items-center justify-center px-1 shadow-md shadow-emerald-500/30">
+                                  {p.dm_enviado}
+                                </span>
                               </a>
                             ) : (
                               <a
                                 href={`https://ig.me/m/${p.username}`}
                                 target="_blank"
                                 rel="noreferrer"
+                                onClick={() => markDmEnviado(p.username)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-pink-500/10 to-purple-500/10 text-pink-400 border border-pink-500/20 rounded-lg text-[10px] font-bold uppercase hover:from-pink-500 hover:to-purple-500 hover:text-white transition-all active:scale-95"
                               >
                                 <Send className="w-3.5 h-3.5" />
@@ -745,7 +883,9 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
                     );
                   };
 
-                  return mainProfiles.map(main => {
+                  return (
+                    <>
+                      {mainProfiles.slice(0, visibleFollowersMap['all_bases'] || 25).map(main => {
                     const followers = followerMap.get(main.username) || [];
                     const allFollowersSelected = followers.length > 0 && followers.every(f => selectedFollowers.includes(f.username));
 
@@ -773,16 +913,16 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
                             </div>
                             
                             {/* Rendereização com Paginação Limitada */}
-                            {followers.slice(0, visibleFollowersMap[main.username] || 100).map(f => renderRow(f, true))}
+                            {applySort(followers).slice(0, visibleFollowersMap[main.username] || 25).map(f => renderRow(f, true))}
                             
-                            {followers.length > (visibleFollowersMap[main.username] || 100) && (
+                            {followers.length > (visibleFollowersMap[main.username] || 25) && (
                               <div className="px-6 py-3 bg-slate-950/30 flex justify-center border-t border-slate-800/50">
                                 <button 
-                                  onClick={() => setVisibleFollowersMap(prev => ({...prev, [main.username]: (prev[main.username] || 100) + 100}))}
+                                  onClick={() => setVisibleFollowersMap(prev => ({...prev, [main.username]: (prev[main.username] || 25) + 25}))}
                                   className="text-[10px] font-bold uppercase tracking-widest text-pink-400 hover:text-white bg-pink-500/10 hover:bg-pink-500/30 border border-pink-500/20 px-4 py-2 rounded-lg transition-all flex items-center gap-2"
                                 >
                                   <RefreshCcw className="w-3 h-3" />
-                                  Carregar mais seguidores (+100 de {followers.length - (visibleFollowersMap[main.username] || 100)} restantes)
+                                  Carregar mais seguidores (+25 de {followers.length - (visibleFollowersMap[main.username] || 25)} restantes)
                                 </button>
                               </div>
                             )}
@@ -790,7 +930,20 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
                         )}
                       </React.Fragment>
                     );
-                  });
+                  })}
+                    {mainProfiles.length > (visibleFollowersMap['all_bases'] || 25) && (
+                      <div className="px-6 py-3 bg-slate-950/30 flex justify-center border-t border-slate-800/50 mt-4 rounded-xl">
+                        <button 
+                          onClick={() => setVisibleFollowersMap(prev => ({...prev, 'all_bases': (prev['all_bases'] || 25) + 25}))}
+                          className="text-[10px] font-bold uppercase tracking-widest text-pink-400 hover:text-white bg-pink-500/10 hover:bg-pink-500/30 border border-pink-500/20 px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+                        >
+                          <RefreshCcw className="w-3 h-3" />
+                          Carregar mais perfis base (+25 de {mainProfiles.length - (visibleFollowersMap['all_bases'] || 25)} restantes)
+                        </button>
+                      </div>
+                    )}
+                    </>
+                  );
                 })()
               )}
             </div>
@@ -826,7 +979,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="absolute bottom-6 right-6 z-20"
+            className="fixed bottom-6 right-6 z-20"
           >
             <button
               onClick={() => setShowDmPanel(true)}
@@ -845,7 +998,7 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="absolute bottom-6 right-6 z-20 bg-slate-900 border border-pink-500/30 p-4 rounded-2xl shadow-2xl shadow-pink-500/20 w-[400px] flex flex-col gap-3 backdrop-blur-md"
+            className="fixed bottom-6 right-6 z-20 bg-slate-900 border border-pink-500/30 p-4 rounded-2xl shadow-2xl shadow-pink-500/20 w-[400px] flex flex-col gap-3 backdrop-blur-md"
           >
             <div className="flex justify-between items-center">
               <h4 className="text-white font-bold text-sm flex items-center gap-2">
@@ -858,16 +1011,40 @@ export default function InstagramDashboard({ sectionRequest = "profile" }: { sec
               <textarea 
                 value={messageTemplate}
                 onChange={(e) => setMessageTemplate(e.target.value)}
-                className="w-full h-24 bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:border-pink-500 outline-none resize-none"
+                className={`w-full h-24 bg-slate-950 border ${messageTemplate.length > 990 ? 'border-yellow-500 focus:border-yellow-500' : 'border-slate-800 focus:border-pink-500'} rounded-xl p-3 text-sm text-white outline-none resize-none`}
                 placeholder="Use {nome} e {username}"
               />
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-[10px] text-slate-500">
-                  <code className="text-pink-400">{"{nome}"}</code> <code className="text-pink-400">{"{username}"}</code>
+              {/* Warm-up opt-in */}
+              <label className="flex items-center gap-2 mt-3 cursor-pointer group select-none">
+                <div className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${likePostsBeforeDm ? 'bg-pink-500' : 'bg-slate-700'}`}
+                  onClick={() => setLikePostsBeforeDm(v => !v)}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${likePostsBeforeDm ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+                <span className={`text-[11px] font-bold transition-colors ${likePostsBeforeDm ? 'text-pink-400' : 'text-slate-500'}`}>
+                  ❤️ Curtir 1–3 posts antes de enviar DM
                 </span>
+                {likePostsBeforeDm && (
+                  <span className="ml-auto text-[9px] text-pink-400/70 font-black uppercase tracking-widest">Warm-up ON</span>
+                )}
+              </label>
+              {likePostsBeforeDm && (
+                <p className="text-[9px] text-slate-600 mt-1 leading-relaxed">
+                  ⏱ O robô curtirá 1–3 posts aleatórios + aguardará 30–90s antes de cada DM. O processo será mais lento, porém muito mais seguro.
+                </p>
+              )}
+              <div className="flex justify-between items-center mt-2">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] text-slate-500">
+                    <code className="text-pink-400">{"{nome}"}</code> <code className="text-pink-400">{"{username}"}</code>
+                  </span>
+                  <span className={`text-[10px] font-bold ${messageTemplate.length > 990 ? 'text-yellow-500' : 'text-slate-400'}`}>
+                    {messageTemplate.length}/990 caracteres
+                  </span>
+                </div>
                 <button
                   onClick={sendBulkDMs}
-                  disabled={sendingDMs || scraperRunning}
+                  disabled={sendingDMs || scraperRunning || messageTemplate.length > 990 || messageTemplate.length === 0}
                   className="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 text-white text-xs font-bold uppercase rounded-lg disabled:opacity-50 transition-all flex items-center gap-2"
                 >
                   {sendingDMs ? <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
