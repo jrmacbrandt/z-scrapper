@@ -64,6 +64,7 @@ npx esbuild server.ts `
     --format=cjs `
     --external:playwright `
     --external:playwright-core `
+    --external:vite `
     --sourcemap `
     --outfile="$DIST\server.cjs" 2>&1 | Out-String | Write-Host
 $ErrorActionPreference = $OldErr

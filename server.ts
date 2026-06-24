@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { initDB } from "./database.js";
 import dotenv from "dotenv";
 import igRouter from "./server-ig.js";
@@ -61,6 +60,7 @@ if (!process.env.VERCEL) {
   const startLocalServer = async () => {
     if (process.env.NODE_ENV !== "production") {
       console.log("🌐 Modo DESENVOLVIMENTO — Vite middleware ativo");
+      const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
       app.use(vite.middlewares);
     } else {
