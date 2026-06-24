@@ -65,6 +65,7 @@ npx esbuild server.ts `
     --external:playwright `
     --external:playwright-core `
     --external:vite `
+    --external:better-sqlite3 `
     --sourcemap `
     --outfile="$DIST\server.cjs" 2>&1 | Out-String | Write-Host
 $ErrorActionPreference = $OldErr
@@ -99,39 +100,19 @@ if (Test-Path $NODE_DIR) {
     Write-Host "  OK: Node.js v$NODE_VERSION portatil pronto." -ForegroundColor Green
 }
 
-# -- Step 4: Install Playwright-only node_modules --
+# -- Step 4: Install production node_modules --
 Write-Host ""
-Write-Host "[4/7] Instalando node_modules de producao - apenas playwright..." -ForegroundColor Yellow
+Write-Host "[4/7] Instalando node_modules de producao..." -ForegroundColor Yellow
 
-if (Test-Path $MOD_DIR) {
-    Write-Host "  Pasta node_modules/ ja existe - pulando." -ForegroundColor DarkGray
-} else {
-    New-Item -ItemType Directory -Path $MOD_DIR -Force | Out-Null
-    
-    # Create a minimal package.json for production install
-    $MINI_PKG = @{
-        name = "zscraper-prod"
-        version = "1.0.0"
-        dependencies = @{
-            playwright = "^1.60.0"
-        }
-    } | ConvertTo-Json -Depth 5
-    
-    $MINI_PKG | Out-File -FilePath (Join-Path $MOD_DIR "..\prod-package.json") -Encoding UTF8
-    
     Set-Location $INSTALLER
-    Copy-Item (Join-Path $ROOT "package-lock.json") (Join-Path $INSTALLER "package-lock.json") -ErrorAction SilentlyContinue
-    
-    $env:npm_config_prefix = $INSTALLER
-    npm install --prefix $INSTALLER playwright --no-save 2>&1 | Out-String | Write-Host
-    
-    # Clean up
-    Remove-Item (Join-Path $INSTALLER "package-lock.json") -ErrorAction SilentlyContinue
-    Remove-Item (Join-Path $INSTALLER "prod-package.json") -ErrorAction SilentlyContinue
+    # Instala todas as dependencias de producao listadas em installer/package.json
+    $OldErr = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    npm install --omit=dev 2>&1 | Out-String | Write-Host
+    $ErrorActionPreference = $OldErr
     
     Set-Location $ROOT
     Write-Host "  OK: node_modules de producao prontos." -ForegroundColor Green
-}
 
 # -- Step 5: Download Playwright Chromium --
 Write-Host ""

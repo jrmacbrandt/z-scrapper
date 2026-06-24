@@ -47,10 +47,10 @@ if exist "%PID_FILE%" (
 title Z-Scraper v1.1.0
 
 echo.
-echo  =========================================
+echo  ===========================================================
 echo   Z-Scraper v1.1.0
-echo   Extrator de Corretores - Zap Imoveis
-echo  =========================================
+echo   Extrator de contatos do Instagram e Google Maps
+echo  ===========================================================
 echo.
 echo  Iniciando servidor...
 
@@ -109,15 +109,5 @@ if defined EDGE_EXE (
     start "" "http://localhost:%PORT%"
 )
 
-:: Manter a janela aberta enquanto o servidor rodar
-:keep_alive
-timeout /t 5 /nobreak >NUL
-if exist "%PID_FILE%" (
-    tasklist /FI "IMAGENAME eq node.exe" 2>NUL | find "node.exe" >NUL
-    if !errorlevel! == 0 goto :keep_alive
-)
-
-echo.
-echo  Servidor encerrado.
-del "%PID_FILE%" >NUL 2>&1
-pause
+:: Fechar janela do prompt automaticamente
+exit /b 0
