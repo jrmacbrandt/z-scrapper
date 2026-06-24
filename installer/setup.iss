@@ -63,3 +63,16 @@ Filename: "{app}\launcher\launch.bat"; Description: "Abrir Z-Scraper agora"; Fla
 
 [UninstallRun]
 Filename: "{app}\launcher\stop.bat"; Flags: shellexec runhidden; RunOnceId: "StopServer"
+
+[Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Result := '';
+  // Se existir a instalacao anterior, roda o stop.bat para liberar os arquivos
+  if FileExists(ExpandConstant('{app}\launcher\stop.bat')) then
+  begin
+    Exec(ExpandConstant('{app}\launcher\stop.bat'), '', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+end;

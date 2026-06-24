@@ -28,9 +28,14 @@ if exist "%PID_FILE%" (
         echo  Z-Scraper ja esta rodando!
         echo  Abrindo janela proprietaria em http://localhost:%PORT%...
         timeout /t 1 /nobreak >NUL
-        where msedge >nul 2>&1
-        if !errorlevel! == 0 (
-            start msedge --app="http://localhost:%PORT%" --window-size=1280,800
+        set "EDGE_EXE="
+        if exist "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" (
+            set "EDGE_EXE=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+        ) else if exist "C:\Program Files\Microsoft\Edge\Application\msedge.exe" (
+            set "EDGE_EXE=C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+        )
+        if defined EDGE_EXE (
+            start "" "!EDGE_EXE!" --app="http://localhost:%PORT%" --window-size=1280,800
         ) else (
             start "" "http://localhost:%PORT%"
         )
@@ -91,9 +96,15 @@ echo  =========================================
 echo.
 
 :: Abrir em janela proprietaria (Microsoft Edge App Mode) se disponivel, caso contrario no navegador padrao
-where msedge >nul 2>&1
-if %errorlevel% == 0 (
-    start msedge --app="http://localhost:%PORT%" --window-size=1280,800
+set "EDGE_EXE="
+if exist "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" (
+    set "EDGE_EXE=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+) else if exist "C:\Program Files\Microsoft\Edge\Application\msedge.exe" (
+    set "EDGE_EXE=C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+)
+
+if defined EDGE_EXE (
+    start "" "%EDGE_EXE%" --app="http://localhost:%PORT%" --window-size=1280,800
 ) else (
     start "" "http://localhost:%PORT%"
 )
